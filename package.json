@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:extract": "py api/extract.py",
+    "dev:vercel": "vercel dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
