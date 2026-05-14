@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { HtmlPreviewModal } from "@/app/components/HtmlPreviewModal";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { formatTokenTotal } from "@/lib/token-usage";
 
 /** Latest N jobs; matches architecture note (10 or 20). */
 const JOB_HISTORY_LIMIT = 20;
@@ -21,6 +22,9 @@ export type JobHistoryRow = {
   html_preview_url?: string | null;
   metadata: {
     htmlPreviewUrl?: string;
+    tokenUsage?: {
+      total?: number;
+    };
   } | null;
 };
 
@@ -75,6 +79,23 @@ function getHtmlPreviewUrl(job: JobHistoryRow): string | null {
   }
   const raw = "htmlPreviewUrl" in m ? (m as { htmlPreviewUrl?: unknown }).htmlPreviewUrl : undefined;
   return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
+
+function parseMetadata(meta: JobHistoryRow["metadata"] | string): JobHistoryRow["metadata"] {
+  if (typeof meta !== "string") {
+    return meta;
+  }
+  try {
+    return JSON.parse(meta) as JobHistoryRow["metadata"];
+  } catch {
+    return null;
+  }
+}
+
+function getTokenUsageTotal(job: JobHistoryRow): number | null {
+  const metadata = parseMetadata(job.metadata);
+  const total = metadata?.tokenUsage?.total;
+  return typeof total === "number" && Number.isFinite(total) ? total : null;
 }
 
 export function JobHistory() {
@@ -166,12 +187,13 @@ export function JobHistory() {
       ) : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[680px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-black/15">
               <th className="pb-2 pr-3 font-medium text-black/70">Filename</th>
               <th className="pb-2 pr-3 font-medium text-black/70">Created</th>
               <th className="pb-2 pr-3 font-medium text-black/70">Status</th>
+              <th className="pb-2 pr-3 font-medium text-black/70">Tokens</th>
               <th className="pb-2 pr-3 font-medium text-black/70">Preview</th>
               <th className="pb-2 font-medium text-black/70">Download</th>
             </tr>
@@ -179,13 +201,14 @@ export function JobHistory() {
           <tbody>
             {jobs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-black/60">
+                <td colSpan={6} className="py-6 text-center text-black/60">
                   No jobs yet.
                 </td>
               </tr>
             ) : (
               jobs.map((job) => {
                 const previewUrl = getHtmlPreviewUrl(job);
+                const tokenTotal = getTokenUsageTotal(job);
                 return (
                   <tr
                     key={job.id}
@@ -203,6 +226,9 @@ export function JobHistory() {
                       >
                         {job.status}
                       </span>
+                    </td>
+                    <td className="whitespace-nowrap py-2.5 pr-3 text-black/70">
+                      {tokenTotal != null ? formatTokenTotal(tokenTotal) : "-"}
                     </td>
                     <td className="py-2.5 pr-3">
                       {job.status === "done" ? (

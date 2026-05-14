@@ -2,6 +2,7 @@ import "server-only";
 
 import { getGeminiClient, geminiModels } from "@/lib/gemini";
 import { withGeminiRetries } from "@/lib/gemini-retry";
+import { normalizeGeminiTokenUsage, type TokenUsageCall } from "@/lib/token-usage";
 
 /** Max characters of XML sent to the model (truncate tail with a note). */
 const MAX_XML_CHARS = 140_000;
@@ -92,6 +93,7 @@ export function stripOuterHtmlFence(raw: string): string {
  */
 export async function generateAiHtmlPreview(
   files: Record<string, string>,
+  onTokenUsage?: (usage: TokenUsageCall) => void,
 ): Promise<{ ok: true; html: string } | { ok: false; message: string }> {
   if (!isAiHtmlPreviewEnabled()) {
     return { ok: false, message: "AI HTML preview is disabled or GEMINI_API_KEY is missing." };
@@ -107,9 +109,10 @@ export async function generateAiHtmlPreview(
       `Treat roughly the last quarter of that budget as RESERVED for wrapping up — stop adding substantive content in time ` +
       `to close </main>, finish any trailing elements, emit </body></html>, and never exceed the ceiling.\n\n`;
 
+    const model = modelForHtmlPreview();
     const response = await withGeminiRetries(() =>
       ai.models.generateContent({
-        model: modelForHtmlPreview(),
+        model,
         contents:
           budgetLine +
           "Convert the following DITA XML file set into the HTML5 preview described in your instructions.\n\n" +
@@ -121,6 +124,10 @@ export async function generateAiHtmlPreview(
         },
       }),
     );
+    const usage = normalizeGeminiTokenUsage("html_preview", model, response.usageMetadata);
+    if (usage) {
+      onTokenUsage?.(usage);
+    }
 
     const text = stripOuterHtmlFence(response.text ?? "");
 

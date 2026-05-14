@@ -2,6 +2,7 @@ import type { ClassifiedTopic, ExtractedPage } from "./classify";
 import { generateAiHtmlPreview, isAiHtmlPreviewEnabled } from "@/lib/ai-html-preview";
 import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";
 import { getErrorMessage } from "@/lib/error-message";
+import type { TokenUsageCall, TokenUsageSummary } from "@/lib/token-usage";
 import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";
 
 export type ValidationIssue = {
@@ -49,6 +50,8 @@ export type JobMetadata = {
   htmlGenerationMessage?: string;
   /** Hosted preview pipeline: toolkit upload vs Gemini single-page HTML (no images in MVP AI path). */
   htmlPreviewSource?: "dita-ot" | "ai";
+  /** Provider-reported Gemini token usage for all successful model calls in this job. */
+  tokenUsage?: TokenUsageSummary;
 };
 
 export type StorageUploadResult = {
@@ -218,6 +221,16 @@ export function buildValidationUserMessage(
   );
 }
 
+export function buildValidationRepairMessage(rawOutput: string): string {
+  return (
+    "The following Agent 2 output was supposed to be one valid JSON object matching " +
+    "ValidationResult, but it failed JSON.parse. Repair only the JSON syntax. Preserve all " +
+    "files XML strings, issue records, booleans, and counts as much as possible. Return only " +
+    "the corrected JSON object, with no markdown fences and no explanation.\n\n" +
+    rawOutput
+  );
+}
+
 export function parseValidationResult(raw: string): ValidationResult {
   const text = stripJsonFence(raw);
   const parsed = JSON.parse(text) as Partial<ValidationResult>;
@@ -383,6 +396,8 @@ export async function uploadFilesToStorage(
   validation: Pick<ValidationResult, "passed" | "issueCount" | "agent2Skipped">,
   now = new Date(),
   supabase: StorageLike,
+  tokenUsage?: TokenUsageSummary | (() => TokenUsageSummary),
+  onTokenUsage?: (usage: TokenUsageCall) => void,
 ): Promise<StorageUploadResult> {
   const zipModule = await import("jszip");
   const JSZip = zipModule.default ?? zipModule;
@@ -455,7 +470,7 @@ export async function uploadFilesToStorage(
   }
 
   if (!htmlExtras.htmlPreviewUrl && isAiHtmlPreviewEnabled()) {
-    const ai = await generateAiHtmlPreview(files);
+    const ai = await generateAiHtmlPreview(files, onTokenUsage);
     if (ai.ok) {
       const previewPrefix = `${jobId}/${stamp}-html-preview`;
       const single = new Map<string, Buffer>([["index.html", Buffer.from(ai.html, "utf8")]]);
@@ -501,6 +516,7 @@ export async function uploadFilesToStorage(
     validationPassed: validation.passed,
     validationIssueCount: validation.issueCount,
     ...(validation.agent2Skipped ? { agent2ValidationSkipped: true } : {}),
+    ...(tokenUsage ? { tokenUsage: typeof tokenUsage === "function" ? tokenUsage() : tokenUsage } : {}),
     ...htmlExtras,
   };
 

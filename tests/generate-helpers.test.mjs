@@ -228,6 +228,16 @@ test("buildValidationUserMessage prepends JSON budget preamble when maxOutputTok
   assert.match(message, /Return exactly one JSON object that parses\./);
 });
 
+test("buildValidationRepairMessage asks for syntax-only JSON repair", async () => {
+  const { buildValidationRepairMessage } = await loadGenerateHelpers();
+
+  const message = buildValidationRepairMessage('{"passed":true,');
+
+  assert.match(message, /failed JSON\.parse/);
+  assert.match(message, /Repair only the JSON syntax/);
+  assert.match(message, /\{"passed":true,/);
+});
+
 test("runDeterministicChecks reports map and image validation issues", async () => {
   const { runDeterministicChecks } = await loadGenerateHelpers();
 
@@ -443,4 +453,63 @@ test("uploadFilesToStorage zips XML and only referenced image assets, then retur
   assert.ok(zip.file("map.ditamap"));
   assert.ok(zip.file("images/page_03_image_01.png"));
   assert.equal(zip.file("images/page_03_image_02.png"), null);
+});
+
+test("uploadFilesToStorage includes token usage metadata when provided", async () => {
+  const { uploadFilesToStorage } = await loadGenerateHelpers();
+  const uploads = [];
+  const supabase = {
+    storage: {
+      from(bucket) {
+        return {
+          async upload(path, body, options) {
+            uploads.push({ bucket, path, body, options });
+            return { error: null };
+          },
+          getPublicUrl(path) {
+            return {
+              data: { publicUrl: `https://example.supabase.co/storage/v1/object/public/${bucket}/${path}` },
+            };
+          },
+        };
+      },
+    },
+  };
+
+  const tokenUsage = {
+    prompt: 100,
+    output: 50,
+    thoughts: 5,
+    toolUse: 0,
+    cached: 10,
+    total: 155,
+    calls: [
+      {
+        phase: "agent1",
+        model: "gemini-test",
+        prompt: 100,
+        output: 50,
+        thoughts: 5,
+        toolUse: 0,
+        cached: 10,
+        total: 155,
+      },
+    ],
+  };
+
+  const result = await uploadFilesToStorage(
+    "job-123",
+    {
+      "c_intro.dita": "<concept/>",
+      "map.ditamap": '<map><topicref href="c_intro.dita"/></map>',
+    },
+    [],
+    { passed: true, issueCount: 0 },
+    new Date("2026-05-14T10:20:30.000Z"),
+    supabase,
+    tokenUsage,
+  );
+
+  assert.equal(uploads.length, 1);
+  assert.deepEqual(result.metadata.tokenUsage, tokenUsage);
 });

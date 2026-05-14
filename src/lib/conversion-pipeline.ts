@@ -13,6 +13,7 @@ import {
   buildFormattingRepairMessage,
   buildGeminiOutputBudgetPreamble,
   buildGenerateUserMessage,
+  buildValidationRepairMessage,
   buildValidationUserMessage,
   collectExtractedAssets,
   ensureRelatedImageFigures,
@@ -41,6 +42,11 @@ import {
 import { getErrorMessage, setJobStatus as updateJobStatus } from "@/lib/jobs";
 import { AGENT_1_SYSTEM_PROMPT, AGENT_2_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import {
+  normalizeGeminiTokenUsage,
+  summarizeTokenUsage,
+  type TokenUsageCall,
+} from "@/lib/token-usage";
 
 export type ConversionPipelineBody = {
   jobId?: string;
@@ -85,8 +91,12 @@ export async function runConversionPipeline(args: {
 }): Promise<ConversionPipelineOutput> {
   const { body, agent1Mode } = args;
   const emit = args.emit ?? (() => undefined);
+  const tokenUsageCalls: TokenUsageCall[] = [];
+  const recordTokenUsage = (usage: TokenUsageCall) => {
+    tokenUsageCalls.push(usage);
+  };
 
-  const { topics, assets } = await resolveTopics(body, emit);
+  const { topics, assets } = await resolveTopics(body, emit, recordTokenUsage);
 
   if (topics.length === 0) {
     throw new Error("No classified topics are available for DITA generation.");
@@ -108,6 +118,7 @@ export async function runConversionPipeline(args: {
       topics,
       mode: agent1Mode,
       onToken: (text) => emit({ type: "token", text }),
+      onTokenUsage: recordTokenUsage,
     }),
     topics,
     assets,
@@ -138,7 +149,7 @@ export async function runConversionPipeline(args: {
       label: "Agent 2 — validating XML",
     });
 
-    validation = await runAgent2(agent1Files, deterministicIssues);
+    validation = await runAgent2(agent1Files, deterministicIssues, recordTokenUsage);
     validation = {
       ...validation,
       files: ensureRelatedImageFigures(
@@ -191,6 +202,8 @@ export async function runConversionPipeline(args: {
       validation,
       new Date(),
       getSupabaseAdmin(),
+      () => summarizeTokenUsage(tokenUsageCalls),
+      recordTokenUsage,
     );
 
     const donePayload: Record<string, unknown> = {
@@ -242,6 +255,7 @@ export async function runConversionPipeline(args: {
 async function resolveTopics(
   body: ConversionPipelineBody,
   emit: (event: ConversionSseEvent) => void,
+  onTokenUsage: (usage: TokenUsageCall) => void,
 ): Promise<ResolvedGenerationInput> {
   if (Array.isArray(body.topics)) {
     return { topics: normalizeClassifiedTopics(body.topics), assets: [] };
@@ -261,7 +275,7 @@ async function resolveTopics(
   emit({ type: "stage", stage: "classifying", label: "Classifying topics" });
   await setJobStatus(body.jobId, "classifying");
 
-  const classifiedTopics = await classifyExtractedPages(extractedPages);
+  const classifiedTopics = await classifyExtractedPages(extractedPages, onTokenUsage);
   const stableTopics = stabilizeCapsAndFloorsTest5Topics(classifiedTopics, extractedPages);
   const topicsWithPageImages = attachPageImagesToTopics(stableTopics, extractedPages);
   emit({ type: "topics", topics: topicsWithPageImages });
@@ -274,20 +288,23 @@ async function runAgent1({
   topics,
   mode,
   onToken,
+  onTokenUsage,
 }: {
   documentTitle?: string;
   topics: ClassifiedTopic[];
   mode: "stream" | "single";
   onToken: (text: string) => void;
+  onTokenUsage: (usage: TokenUsageCall) => void;
 }): Promise<Record<string, string>> {
   const ai = getGeminiClient();
   const maxOut = maxAgent1OutputTokens();
   const userMessage = buildGenerateUserMessage({ documentTitle, topics }, { maxOutputTokens: maxOut });
+  const model = geminiModels.generate;
 
   if (mode === "single") {
     const response = await withGeminiRetries(() =>
       ai.models.generateContent({
-        model: geminiModels.generate,
+        model,
         contents: userMessage,
         config: {
           systemInstruction: AGENT_1_SYSTEM_PROMPT,
@@ -296,19 +313,23 @@ async function runAgent1({
         },
       }),
     );
+    const usage = normalizeGeminiTokenUsage("agent1", model, response.usageMetadata);
+    if (usage) {
+      onTokenUsage(usage);
+    }
 
     const fullText = response.text ?? "";
 
     try {
       return parseFiles(fullText);
     } catch {
-      return repairDelimitedOutput(fullText);
+      return repairDelimitedOutput(fullText, onTokenUsage);
     }
   }
 
   const stream = await withGeminiRetries(() =>
     ai.models.generateContentStream({
-      model: geminiModels.generate,
+      model,
       contents: userMessage,
       config: {
         systemInstruction: AGENT_1_SYSTEM_PROMPT,
@@ -319,34 +340,44 @@ async function runAgent1({
   );
 
   let fullText = "";
+  let latestUsage: TokenUsageCall | null = null;
 
   for await (const chunk of stream) {
     const text = chunk.text ?? "";
+    const usage = normalizeGeminiTokenUsage("agent1", model, chunk.usageMetadata);
+    if (usage) {
+      latestUsage = usage;
+    }
 
     if (text) {
       fullText += text;
       onToken(text);
     }
   }
+  if (latestUsage) {
+    onTokenUsage(latestUsage);
+  }
 
   try {
     return parseFiles(fullText);
   } catch {
-    return repairDelimitedOutput(fullText);
+    return repairDelimitedOutput(fullText, onTokenUsage);
   }
 }
 
 async function runAgent2(
   files: Record<string, string>,
   deterministicIssues: ValidationIssue[],
+  onTokenUsage: (usage: TokenUsageCall) => void,
 ): Promise<ValidationResult> {
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const ai = getGeminiClient();
   const maxOut = maxAgent2OutputTokens();
+  const model = geminiModels.validate;
   const response = await withGeminiRetries(() =>
     ai.models.generateContent({
-      model: geminiModels.validate,
+      model,
       contents: buildValidationUserMessage({ files, deterministicIssues }, { maxOutputTokens: maxOut }),
       config: {
         systemInstruction: AGENT_2_SYSTEM_PROMPT,
@@ -356,16 +387,74 @@ async function runAgent2(
       },
     }),
   );
+  const usage = normalizeGeminiTokenUsage("agent2", model, response.usageMetadata);
+  if (usage) {
+    onTokenUsage(usage);
+  }
 
-  return parseValidationResult(response.text ?? "");
+  const rawText = response.text ?? "";
+  try {
+    return parseValidationResult(rawText);
+  } catch {
+    return repairValidationJson(rawText, files, deterministicIssues, onTokenUsage);
+  }
 }
 
-async function repairDelimitedOutput(rawOutput: string): Promise<Record<string, string>> {
+async function repairValidationJson(
+  brokenOutput: string,
+  fallbackFiles: Record<string, string>,
+  deterministicIssues: ValidationIssue[],
+  onTokenUsage?: (usage: TokenUsageCall) => void,
+): Promise<ValidationResult> {
+  const ai = getGeminiClient();
+  const maxOut = maxAgent2OutputTokens();
+  const model = geminiModels.validate;
+
+  try {
+    const response = await withGeminiRetries(() =>
+      ai.models.generateContent({
+        model,
+        contents: buildValidationRepairMessage(brokenOutput),
+        config: {
+          responseMimeType: "application/json",
+          maxOutputTokens: maxOut,
+          temperature: 0,
+        },
+      }),
+    );
+    const usage = normalizeGeminiTokenUsage("agent2_repair", model, response.usageMetadata);
+    if (usage) {
+      onTokenUsage?.(usage);
+    }
+
+    return parseValidationResult(response.text ?? "");
+  } catch {
+    return {
+      ...validationResultWithoutAgent2(fallbackFiles, deterministicIssues),
+      issues: [
+        ...deterministicIssues,
+        {
+          rule: "AGENT2_JSON_PARSE",
+          severity: "warning",
+          message: "Agent 2 returned malformed JSON and repair failed; preserved Agent 1 output.",
+          fixed: false,
+        },
+      ],
+      issueCount: deterministicIssues.length + 1,
+    };
+  }
+}
+
+async function repairDelimitedOutput(
+  rawOutput: string,
+  onTokenUsage?: (usage: TokenUsageCall) => void,
+): Promise<Record<string, string>> {
   const ai = getGeminiClient();
   const maxOut = maxAgent1OutputTokens();
+  const model = geminiModels.generate;
   const response = await withGeminiRetries(() =>
     ai.models.generateContent({
-      model: geminiModels.generate,
+      model,
       contents:
         buildGeminiOutputBudgetPreamble(maxOut, "agent1-xml") + buildFormattingRepairMessage(rawOutput),
       config: {
@@ -375,15 +464,23 @@ async function repairDelimitedOutput(rawOutput: string): Promise<Record<string, 
       },
     }),
   );
+  const usage = normalizeGeminiTokenUsage("agent1_repair", model, response.usageMetadata);
+  if (usage) {
+    onTokenUsage?.(usage);
+  }
 
   return parseFiles(response.text ?? "");
 }
 
-async function classifyExtractedPages(extractedPages: ExtractedPage[]): Promise<ClassifiedTopic[]> {
+async function classifyExtractedPages(
+  extractedPages: ExtractedPage[],
+  onTokenUsage: (usage: TokenUsageCall) => void,
+): Promise<ClassifiedTopic[]> {
   const ai = getGeminiClient();
+  const model = geminiModels.classify;
   const response = await withGeminiRetries(() =>
     ai.models.generateContent({
-      model: geminiModels.classify,
+      model,
       contents: buildClassifyUserMessage(extractedPages),
       config: {
         systemInstruction: CLASSIFY_SYSTEM_PROMPT,
@@ -391,13 +488,17 @@ async function classifyExtractedPages(extractedPages: ExtractedPage[]): Promise<
       },
     }),
   );
+  const usage = normalizeGeminiTokenUsage("classify", model, response.usageMetadata);
+  if (usage) {
+    onTokenUsage(usage);
+  }
 
   let classifiedTopics: ClassifiedTopic[];
 
   try {
     classifiedTopics = parseClassifiedTopics(response.text ?? "");
   } catch {
-    classifiedTopics = await repairClassifiedJson(response.text ?? "");
+    classifiedTopics = await repairClassifiedJson(response.text ?? "", onTokenUsage);
   }
 
   if (classifiedTopics.length === 0) {
@@ -407,11 +508,15 @@ async function classifyExtractedPages(extractedPages: ExtractedPage[]): Promise<
   return classifiedTopics;
 }
 
-async function repairClassifiedJson(brokenOutput: string): Promise<ClassifiedTopic[]> {
+async function repairClassifiedJson(
+  brokenOutput: string,
+  onTokenUsage?: (usage: TokenUsageCall) => void,
+): Promise<ClassifiedTopic[]> {
   const ai = getGeminiClient();
+  const model = geminiModels.classify;
   const response = await withGeminiRetries(() =>
     ai.models.generateContent({
-      model: geminiModels.classify,
+      model,
       contents:
         "The following output was supposed to be a valid JSON array of ClassifiedTopic objects " +
         "but failed to parse. Fix the JSON syntax and return only the corrected JSON array, " +
@@ -421,6 +526,10 @@ async function repairClassifiedJson(brokenOutput: string): Promise<ClassifiedTop
       },
     }),
   );
+  const usage = normalizeGeminiTokenUsage("classify_repair", model, response.usageMetadata);
+  if (usage) {
+    onTokenUsage?.(usage);
+  }
 
   return parseClassifiedTopics(response.text ?? "");
 }
