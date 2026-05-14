@@ -2,7 +2,7 @@ import "server-only";
 
 import { GoogleGenAI } from "@google/genai";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 export const geminiModels = {
   classify: process.env.GEMINI_CLASSIFY_MODEL ?? DEFAULT_GEMINI_MODEL,

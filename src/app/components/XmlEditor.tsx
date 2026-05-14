@@ -4,6 +4,15 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
 import type { ConversionState } from "@/app/hooks/useConversionStream";
+import { parseDelimitedDitaOutput } from "@/lib/parse-delimited-dita-output";
+
+function pickXmlTextFiles(files: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(files).filter(
+      ([name]) => name.endsWith(".dita") || name.endsWith(".ditamap"),
+    ),
+  );
+}
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
@@ -50,41 +59,59 @@ export type XmlEditorProps = {
 };
 
 export function XmlEditor({ state }: XmlEditorProps) {
-  const hasFiles = Object.keys(state.files).length > 0;
+  const { displayFiles, hasValidated } = useMemo(() => {
+    const validated = pickXmlTextFiles(state.files);
+    const has = Object.keys(validated).length > 0;
+    const files = has
+      ? validated
+      : pickXmlTextFiles(parseDelimitedDitaOutput(state.xmlBuffer));
+    return { displayFiles: files, hasValidated: has };
+  }, [state.files, state.xmlBuffer]);
+
+  const hasFileTabs = Object.keys(displayFiles).length > 0;
 
   const sortedKeys = useMemo(
-    () => sortTabKeys(Object.keys(state.files)),
-    [state.files],
+    () => sortTabKeys(Object.keys(displayFiles)),
+    [displayFiles],
+  );
+
+  const defaultTab = useMemo(
+    () => sortedKeys.find((k) => k.endsWith(".ditamap")) ?? sortedKeys[0] ?? null,
+    [sortedKeys],
   );
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   const displaySelected =
-    hasFiles && sortedKeys.length > 0
+    sortedKeys.length > 0
       ? selectedFile && sortedKeys.includes(selectedFile)
         ? selectedFile
-        : sortedKeys[0]
+        : defaultTab
       : null;
 
   const value =
-    hasFiles && displaySelected != null
-      ? (state.files[displaySelected] ?? "")
+    hasFileTabs && displaySelected != null
+      ? (displayFiles[displaySelected] ?? "")
       : state.xmlBuffer;
 
+  const statusLabel = hasValidated
+    ? "Validated output"
+    : hasFileTabs
+      ? "Live preview"
+      : null;
+
   return (
-    <section className="flex flex-col gap-2" aria-label="DITA XML output">
+    <section className="flex flex-col gap-2" aria-label="DITA XML preview">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          XML output
+          XML Preview
         </h2>
-        {hasFiles ? (
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            Validated output
-          </span>
+        {statusLabel ? (
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">{statusLabel}</span>
         ) : null}
       </div>
 
-      {hasFiles ? (
+      {hasFileTabs ? (
         <div
           className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2 dark:border-zinc-700"
           role="tablist"

@@ -1,5 +1,6 @@
 import type { ClassifiedTopic, ExtractedPage } from "./classify";
 import { getErrorMessage } from "@/lib/error-message";
+import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";
 
 export type ValidationIssue = {
   rule: string;
@@ -90,18 +91,10 @@ export function buildGenerateUserMessage(req: GenerateRequest): string {
 }
 
 export function parseFiles(raw: string): Record<string, string> {
-  const files: Record<string, string> = {};
-  const fileRegex = /%%FILE:([^%]+)%%\n([\s\S]*?)(?=%%FILE:|%%END%%|$)/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = fileRegex.exec(raw)) !== null) {
-    const filename = match[1].trim();
-    const content = match[2].trim();
-
-    if (filename && content) {
-      files[filename] = content;
-    }
-  }
+  const loose = parseDelimitedDitaOutput(raw);
+  const files: Record<string, string> = Object.fromEntries(
+    Object.entries(loose).filter(([, content]) => Boolean(content)),
+  );
 
   const filenames = Object.keys(files);
 

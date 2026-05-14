@@ -1,27 +1,54 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 import ts from "typescript";
+
+const TS_OPTS = {
+  compilerOptions: {
+    module: ts.ModuleKind.ES2022,
+    target: ts.ScriptTarget.ES2022,
+    verbatimModuleSyntax: true,
+  },
+};
 
 async function loadGenerateHelpers() {
   const require = createRequire(import.meta.url);
   const fastXmlParserUrl = pathToFileURL(require.resolve("fast-xml-parser")).href;
   const jszipUrl = pathToFileURL(require.resolve("jszip")).href;
-  const sourcePath = new URL("../src/lib/generate.ts", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true,
-    },
-  }).outputText
+
+  const parseDelimitedPath = fileURLToPath(new URL("../src/lib/parse-delimited-dita-output.ts", import.meta.url));
+  const errorMessagePath = fileURLToPath(new URL("../src/lib/error-message.ts", import.meta.url));
+  const generatePath = fileURLToPath(new URL("../src/lib/generate.ts", import.meta.url));
+
+  const [parseDelimitedSrc, errorMessageSrc, generateSrc] = await Promise.all([
+    readFile(parseDelimitedPath, "utf8"),
+    readFile(errorMessagePath, "utf8"),
+    readFile(generatePath, "utf8"),
+  ]);
+
+  const parseDelimitedJs = ts
+    .transpileModule(parseDelimitedSrc, TS_OPTS)
+    .outputText.replace(/^export function parseDelimitedDitaOutput/m, "function parseDelimitedDitaOutput");
+
+  const errorMessageJs = ts
+    .transpileModule(errorMessageSrc, TS_OPTS)
+    .outputText.replace(/^export function getErrorMessage/m, "function getErrorMessage");
+
+  const generateJs = ts
+    .transpileModule(generateSrc, TS_OPTS)
+    .outputText
+    .replace('import { getErrorMessage } from "@/lib/error-message";\r\n', "")
+    .replace('import { getErrorMessage } from "@/lib/error-message";\n', "")
+    .replace('import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";\r\n', "")
+    .replace('import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";\n', "")
     .replace('import("fast-xml-parser")', `import("${fastXmlParserUrl}")`)
     .replace('import("jszip")', `import("${jszipUrl}")`);
 
-  const encoded = Buffer.from(transpiled, "utf8").toString("base64");
+  const combined = `${parseDelimitedJs}\n${errorMessageJs}\n${generateJs}`;
+
+  const encoded = Buffer.from(combined, "utf8").toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
 }
 
