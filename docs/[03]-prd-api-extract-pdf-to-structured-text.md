@@ -23,19 +23,19 @@ This is the first step in the pipeline. Its output feeds directly into PRD-04 (/
 
 ## **Tasks**
 
-14. Create /app/api/extract/route.ts
+14. [x] Create /app/api/extract/route.ts
 
-15. Add export const maxDuration \= 60 at the top of the file
+15. [x] Add export const maxDuration \= 60 at the top of the file
 
-16. Implement the PYTHON\_EXTRACTOR string constant exactly as specified in two\_agent\_gemini\_pipeline.md
+16. [x] Implement the PYTHON\_EXTRACTOR string constant exactly as specified in two\_agent\_gemini\_pipeline.md
 
-17. Implement the POST handler: read FormData, write PDF to /tmp/{randomHex}.pdf, write Python script to /tmp/{randomHex}.py
+17. [x] Implement the POST handler: read FormData, write PDF to /tmp/{randomHex}.pdf, write Python script to /tmp/{randomHex}.py
 
-18. Run: const { stdout } \= await execAsync(\`python3 ${pyPath} ${pdfPath}\`)
+18. [x] Run: const { stdout } \= await execAsync(\`python3 ${pyPath} ${pdfPath}\`)
 
-19. Parse stdout as JSON and return as { extractedPages }
+19. [x] Parse stdout as JSON and return as { extractedPages }
 
-20. In a finally block, unlink both temp files with .catch(() \=\> {})
+20. [x] In a finally block, unlink both temp files with .catch(() \=\> {})
 
 ## **Code reference**
 
@@ -79,5 +79,11 @@ type ExtractedImage = {
 
 - Image extraction should happen in Python. The first implementation should support embedded/raster PDF images and cap base64 payloads at about 2 MB per image and 10 MB total per PDF.
 - OCR should be an optional fallback stage after the core text/image pipeline works. OCR output must normalize back into the same `ExtractedPage` shape.
+
+### Completion notes — May 14, 2026
+
+- Completed according to the May 13 architecture update: the implemented route is the deployed Python extractor in `api/extract.py`, with local Next.js development continuing to rewrite `/api/extract` to `http://127.0.0.1:8001/api/extract`.
+- The older TypeScript subprocess checklist items above are marked done as superseded by the architecture update rather than implemented under `src/app/api/extract/route.ts`.
+- The extractor now returns `source: "pdfplumber"` and `images` on each page, supports direct embedded JPEG/PNG streams plus a rendered PNG fallback, and enforces 2 MB per-image / 10 MB total base64 payload caps.
 
 
