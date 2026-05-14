@@ -8,6 +8,7 @@ import {
   parseClassifiedTopics,
   stripJsonFences,
 } from "@/lib/classify";
+import { getErrorMessage } from "@/lib/error-message";
 import { geminiModels, getGeminiClient } from "@/lib/gemini";
 import { CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 
@@ -94,8 +95,4 @@ async function repairJson(brokenOutput: string): Promise<ClassifiedTopic[]> {
   });
 
   return parseClassifiedTopics(response.text ?? "");
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

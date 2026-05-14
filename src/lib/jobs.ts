@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getErrorMessage } from "@/lib/error-message";
+
+export { getErrorMessage } from "@/lib/error-message";
+
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export type JobStatus =
@@ -136,8 +140,4 @@ export async function setJobStatus(
   if (error) {
     throw new Error(getErrorMessage(error));
   }
-}
-
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

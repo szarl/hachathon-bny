@@ -4,6 +4,7 @@ import { useCallback, useId, useRef, useState } from "react";
 
 import type { ConversionState } from "@/app/hooks/useConversionStream";
 
+import { getErrorMessage } from "@/lib/error-message";
 import { validatePdfUpload } from "@/lib/jobs";
 
 export function documentTitleFromFilename(filename: string): string {
@@ -155,9 +156,9 @@ export function UploadZone({
 
       try {
         const parsed = JSON.parse(text) as unknown;
-        const record = parsed as JobsApiOk & { error?: string };
-        if (typeof record.error === "string" && !res.ok) {
-          setLocalError(record.error);
+        const record = parsed as JobsApiOk & { error?: unknown };
+        if ("error" in record && record.error !== undefined && !res.ok) {
+          setLocalError(getErrorMessage(record.error));
           return;
         }
         if (

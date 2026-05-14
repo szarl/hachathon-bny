@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import type { ClassifiedTopic } from "@/lib/classify";
+import { getErrorMessage } from "@/lib/error-message";
 import type { AssetSummary, JobMetadata, ValidationIssue } from "@/lib/generate";
 
 export type Stage =
@@ -40,7 +41,7 @@ type SseEvent =
   | { type: "files"; files: Record<string, string> }
   | { type: "assets"; assets: AssetSummary[] }
   | { type: "done"; outputUrl: string; metadata: JobMetadata }
-  | { type: "error"; error: string };
+  | { type: "error"; error: unknown };
 
 export type ConversionState = {
   stage: Stage;
@@ -135,7 +136,7 @@ function handleEvent(prev: ConversionState, event: SseEvent): ConversionState {
         ...prev,
         stage: "error",
         stageLabel: "Error",
-        error: event.error,
+        error: getErrorMessage(event.error),
         failedAtMacroIndex:
           prev.stage === "error"
             ? prev.failedAtMacroIndex
@@ -170,8 +171,8 @@ export function useConversionStream() {
           let message = `Request failed (${res.status})`;
           try {
             const parsed = JSON.parse(text) as unknown;
-            if (isRecord(parsed) && typeof parsed.error === "string") {
-              message = parsed.error;
+            if (isRecord(parsed) && "error" in parsed) {
+              message = getErrorMessage(parsed.error);
             }
           } catch {
             if (text.trim()) {
@@ -235,7 +236,7 @@ export function useConversionStream() {
           }
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = getErrorMessage(error);
         setState((prev) => ({
           ...prev,
           stage: "error",

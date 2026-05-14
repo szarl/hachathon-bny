@@ -15,7 +15,31 @@
 
 # python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env.venv
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# supabase (local CLI cache and generated junk — keep migrations/ tracked)
+supabase/.temp/
+supabase/.branches/
+.supabase/
 
 # next.js
 /.next/

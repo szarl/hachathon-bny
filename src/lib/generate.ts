@@ -1,4 +1,5 @@
 import type { ClassifiedTopic, ExtractedPage } from "./classify";
+import { getErrorMessage } from "@/lib/error-message";
 
 export type ValidationIssue = {
   rule: string;
@@ -263,7 +264,7 @@ export async function uploadFilesToStorage(
   });
 
   if (error) {
-    throw new Error(error instanceof Error ? error.message : String(error));
+    throw new Error(getErrorMessage(error));
   }
 
   const { data } = supabase.storage.from("outputs").getPublicUrl(path);
