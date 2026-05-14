@@ -205,6 +205,15 @@ export function collectExtractedAssets(pages: ExtractedPage[]): ExtractedAsset[]
   return pages.flatMap((page) => page.images ?? []);
 }
 
+/** Subset of `files` for SSE `files` events: XML topics and ditamaps only (no stray JSON keys). */
+export function pickXmlTextFilesForSse(files: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(files).filter(
+      ([name]) => name.endsWith(".dita") || name.endsWith(".ditamap"),
+    ),
+  );
+}
+
 export async function uploadFilesToStorage(
   jobId: string,
   files: Record<string, string>,

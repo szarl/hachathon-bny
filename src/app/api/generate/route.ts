@@ -15,6 +15,7 @@ import {
   collectExtractedAssets,
   parseFiles,
   parseValidationResult,
+  pickXmlTextFilesForSse,
   runDeterministicChecks,
   uploadFilesToStorage,
   type AssetSummary,
@@ -29,6 +30,7 @@ import { AGENT_1_SYSTEM_PROMPT, AGENT_2_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } 
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+// Agent streaming + validation + in-memory ZIP: within Vercel Hobby limit; raise on Pro if timeouts occur.
 export const maxDuration = 60;
 
 type GenerateRequestBody = {
@@ -145,11 +147,11 @@ export async function POST(req: NextRequest) {
             metadata: upload.metadata,
           });
 
-          send({ type: "files", files: validation.files });
+          send({ type: "files", files: pickXmlTextFilesForSse(validation.files) });
           send({ type: "assets", assets: upload.assets });
           send({ type: "done", outputUrl: upload.outputUrl, metadata: upload.metadata });
         } else {
-          send({ type: "files", files: validation.files });
+          send({ type: "files", files: pickXmlTextFilesForSse(validation.files) });
         }
       } catch (error) {
         const message = getErrorMessage(error);

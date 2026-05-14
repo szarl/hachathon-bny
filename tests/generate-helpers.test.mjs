@@ -166,6 +166,50 @@ test("runDeterministicChecks accepts non-self-closing images with alt text", asy
   assert.equal(issues.some((issue) => issue.rule === "IMAGE_REFERENCES"), false);
 });
 
+test("pickXmlTextFilesForSse keeps only .dita and .ditamap entries for Monaco SSE", async () => {
+  const { pickXmlTextFilesForSse } = await loadGenerateHelpers();
+
+  const sse = pickXmlTextFilesForSse({
+    "c_intro.dita": "<concept/>",
+    "map.ditamap": "<map/>",
+    "_manifest.json": "{}",
+    notes: "not xml",
+  });
+
+  assert.deepEqual(Object.keys(sse), ["c_intro.dita", "map.ditamap"]);
+});
+
+test("uploadFilesToStorage throws when Supabase upload returns an error", async () => {
+  const { uploadFilesToStorage } = await loadGenerateHelpers();
+  const supabase = {
+    storage: {
+      from() {
+        return {
+          async upload() {
+            return { error: new Error("storage quota") };
+          },
+          getPublicUrl() {
+            return { data: { publicUrl: "" } };
+          },
+        };
+      },
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      uploadFilesToStorage(
+        "job-123",
+        { "c_intro.dita": "<concept/>", "map.ditamap": "<map/>" },
+        [],
+        { passed: true, issueCount: 0 },
+        new Date(),
+        supabase,
+      ),
+    /storage quota/,
+  );
+});
+
 test("uploadFilesToStorage zips XML and only referenced image assets, then returns metadata", async () => {
   const require = createRequire(import.meta.url);
   const JSZip = require("jszip");
