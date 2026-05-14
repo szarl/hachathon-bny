@@ -23,9 +23,9 @@ Must be completed before PRD-05 (job creation) and PRD-09 (realtime hook). Can b
 
 ## **Tasks**
 
-8. Create a new Supabase project in the dashboard
+8. [x] Create a new Supabase project in the dashboard
 
-9. Open SQL editor and run the following migration exactly:
+9. [x] Open SQL editor and run the following migration exactly:
 
 Run this SQL migration in the Supabase SQL editor:
 
@@ -57,13 +57,13 @@ create policy "public insert" on jobs for insert with check (true);
 
 create policy "public update" on jobs for update using (true);
 
-10. Create uploads bucket in Storage → New bucket → name: uploads → private
+10. [x] Create uploads bucket in Storage → New bucket → name: uploads → private
 
-11. Create outputs bucket in Storage → New bucket → name: outputs → public
+11. [x] Create outputs bucket in Storage → New bucket → name: outputs → public
 
-12. Enable realtime: Database → Replication → toggle jobs table on
+12. [x] Enable realtime: Database → Replication → toggle jobs table on
 
-13. Copy SUPABASE\_URL and SERVICE\_ROLE\_KEY into .env.local
+13. [x] Copy SUPABASE\_URL and SERVICE\_ROLE\_KEY into .env.local
 
 ## **Notes**
 
