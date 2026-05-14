@@ -10,6 +10,7 @@ import { BATCH_RUN_CONCURRENCY, BATCH_UPLOAD_CONCURRENCY, MAX_BATCH_JOBS } from 
 import { getErrorMessage } from "@/lib/error-message";
 import { validatePdfUpload } from "@/lib/jobs";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { formatTokenTotal } from "@/lib/token-usage";
 
 const POLL_MS = 3000;
 const BATCH_HISTORY_LIMIT = 25;
@@ -73,6 +74,16 @@ function getHtmlPreviewUrl(job: BatchJobRow): string | null {
   }
   const raw = m.htmlPreviewUrl;
   return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
+
+function getTokenUsageTotal(job: BatchJobRow): number | null {
+  const m = parseMetadata(job.metadata);
+  const tokenUsage = m?.tokenUsage;
+  if (!tokenUsage || typeof tokenUsage !== "object" || Array.isArray(tokenUsage)) {
+    return null;
+  }
+  const total = (tokenUsage as { total?: unknown }).total;
+  return typeof total === "number" && Number.isFinite(total) ? total : null;
 }
 
 function badgeClasses(status: string): string {
@@ -185,6 +196,7 @@ function JobsTable({
           <tr>
             <th className="px-4 py-2 font-medium">Filename</th>
             <th className="px-4 py-2 font-medium">Status</th>
+            <th className="px-4 py-2 font-medium">Tokens</th>
             <th className="px-4 py-2 font-medium">Preview</th>
             <th className="px-4 py-2 font-medium">Download</th>
           </tr>
@@ -192,13 +204,14 @@ function JobsTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={4} className="px-4 py-6 text-center text-black/55">
+              <td colSpan={5} className="px-4 py-6 text-center text-black/55">
                 {emptyLabel}
               </td>
             </tr>
           ) : (
             rows.map((row) => {
               const previewUrl = getHtmlPreviewUrl(row);
+              const tokenTotal = getTokenUsageTotal(row);
               return (
                 <tr key={row.id} className="border-b border-black/5">
                   <td className="max-w-[220px] truncate px-4 py-2 font-medium text-black">{row.filename}</td>
@@ -211,6 +224,9 @@ function JobsTable({
                     {row.status === "error" && row.error ? (
                       <span className="mt-1 block text-xs text-red-700">{row.error}</span>
                     ) : null}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2 text-black/70">
+                    {tokenTotal != null ? formatTokenTotal(tokenTotal) : "-"}
                   </td>
                   <td className="px-4 py-2">
                     {row.status === "done" ? (

@@ -62,11 +62,6 @@ export function AppSidebar() {
       className="flex w-60 shrink-0 flex-col border-r border-bny-teal bg-bny-navy text-white"
       aria-label="Application navigation"
     >
-      <div className="border-b border-bny-teal px-4 py-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-          Navigation
-        </p>
-      </div>
       <nav className="flex flex-1 flex-col gap-1 px-2 py-4">
         {primaryNav.map((item) => (
           <NavLink

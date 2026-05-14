@@ -2,7 +2,7 @@ import "server-only";
 
 import { getErrorMessage } from "@/lib/error-message";
 
-const DEFAULT_MAX_ATTEMPTS = 6;
+const DEFAULT_MAX_RETRIES = 3;
 const BASE_DELAY_MS = 750;
 const MAX_DELAY_MS = 12_000;
 
@@ -98,8 +98,13 @@ export function isRetryableGeminiError(error: unknown): boolean {
  * Retries a Gemini call with exponential backoff when the error looks transient.
  * Does not retry on success or on non-retryable failures.
  */
-export async function withGeminiRetries<T>(operation: () => Promise<T>): Promise<T> {
-  const maxAttempts = DEFAULT_MAX_ATTEMPTS;
+export async function withGeminiRetries<T>(
+  operation: () => Promise<T>,
+  options: { maxRetries?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<T> {
+  const maxRetries = Math.max(0, Math.floor(options.maxRetries ?? DEFAULT_MAX_RETRIES));
+  const maxAttempts = maxRetries + 1;
+  const wait = options.sleep ?? sleep;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -110,7 +115,7 @@ export async function withGeminiRetries<T>(operation: () => Promise<T>): Promise
       if (attempt >= maxAttempts || !isRetryableGeminiError(error)) {
         throw error;
       }
-      await sleep(backoffDelayMs(attempt));
+      await wait(backoffDelayMs(attempt));
     }
   }
 
