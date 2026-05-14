@@ -41,4 +41,19 @@ Uses @monaco-editor/react. The live streaming (xmlBuffer) and the final tabbed v
 | *Monaco must be dynamically imported with ssr: false — it uses browser APIs and will crash on SSR. The dynamic import adds \~200ms first-render latency which is acceptable.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- During Agent 1 generation, show one raw live stream buffer. Partial XML is expected and should not be treated as an error.
+- Do not try to create tabs while streaming; delimiter parsing is only reliable after Agent 1 completes.
+- After the `files` event, replace the live stream with final validated tabs.
+- Tabs should show XML files only:
+  - `c_*.dita`
+  - `t_*.dita`
+  - `r_*.dita`
+  - `map.ditamap`
+- Image previews are out of scope for the first build. Judges can verify image references in XML and image files in the ZIP.
+- Show a small label such as `Validated output` after final files arrive.
+
 

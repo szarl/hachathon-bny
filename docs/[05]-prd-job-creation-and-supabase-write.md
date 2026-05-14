@@ -37,4 +37,19 @@ Job creation happens in the frontend before calling /api/generate. The jobId is 
 | *The Supabase client in API routes must use the SERVICE\_ROLE\_KEY, not the anon key. The anon key does not have permission to update rows without a user session.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Job creation should move from the browser to `POST /api/jobs`.
+- The browser sends one PDF to `/api/jobs`; the server validates PDF-only and 50 MB max.
+- `/api/jobs` should:
+  1. Create a `jobs` row with `status: "pending"` and the display filename.
+  2. Upload the original PDF to `uploads/{jobId}/{timestamp}-{safeFilename}`.
+  3. Store the public `pdf_url` on the job row.
+  4. Return `{ jobId, pdfUrl }`.
+- If upload fails after row creation, mark the job `error`.
+- Keep `jobs.filename` as the display/original filename, but sanitize storage paths.
+- The browser then starts `POST /api/generate` with `{ jobId, documentTitle }`; `/api/generate` looks up `pdf_url`.
+
 

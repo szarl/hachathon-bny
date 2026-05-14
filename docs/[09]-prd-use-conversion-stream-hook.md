@@ -49,4 +49,20 @@ Full implementation in two\_agent\_gemini\_pipeline.md, section "React hook — 
 | *Use try-catch inside the line parsing loop — partial SSE chunks arrive mid-JSON and will throw. Swallow the error and let the next read deliver the complete event.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- The hook should consume one backend-owned SSE stream from `/api/generate`; it should not orchestrate extract and classify calls.
+- `startConversion` should accept `{ jobId, documentTitle }`.
+- Add optional stages/events for backend sub-status:
+  - `ocr`
+  - `topics`
+  - `assets`
+  - final `metadata`
+- Keep `files` as `Record<string, string>` for XML only.
+- Keep asset summaries out of `files` so Monaco never receives base64 data.
+- During Agent 1 streaming, append `token` text to `xmlBuffer`.
+- After the `files` event, switch state to final validated files and treat `xmlBuffer` as a draft/debug buffer only.
+
 

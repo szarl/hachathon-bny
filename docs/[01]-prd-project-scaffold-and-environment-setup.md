@@ -42,4 +42,20 @@ This PRD must be completed before all others. No other PRD can be started until 
 | *Do not install pdfplumber via npm — it is a Python package. It will be invoked via child\_process in PRD-03. Python 3 must be available at python3 on the PATH.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- The app is already scaffolded in the repo root under `src/app`.
+- Use `@google/genai`, not `@google/generative-ai`.
+- Add only required runtime dependencies: `@monaco-editor/react`, `jszip`, `fast-xml-parser`, and `lucide-react`.
+- Runtime API code should live under `src/app/api/...`.
+- Shared server helpers should live under `src/lib/...`.
+- Add split model env vars with defaults in code:
+  - `GEMINI_CLASSIFY_MODEL`
+  - `GEMINI_GENERATE_MODEL`
+  - `GEMINI_VALIDATE_MODEL`
+- Add `EXTRACT_API_URL` for production extraction when the deployed Python function is not reached through the local rewrite.
+- Keep secrets out of client components. The service role key is server-only.
+
 

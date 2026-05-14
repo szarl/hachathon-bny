@@ -40,4 +40,19 @@ The history table is a strong demo asset — it makes the tool feel like a real 
 | *Realtime subscription requires the jobs table to have replication enabled (done in PRD-02). If realtime is not working, poll every 3 seconds as a fallback.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- The download button should show the final summary from SSE/job metadata, such as XML file count and used image count.
+- History should remain read-only for the first build.
+- Show only the most recent 10 or 20 jobs, newest first.
+- Keep columns minimal:
+  - Filename
+  - Created
+  - Status
+  - Actions
+- Do not add delete/clear actions yet.
+- Use realtime for inserts/updates, with polling every 3 seconds as fallback.
+
 

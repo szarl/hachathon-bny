@@ -48,4 +48,20 @@ Full implementation in two\_agent\_gemini\_pipeline.md, section "Agent 2: valida
 | *The 2-second delay between Agent 1 and Agent 2 prevents 429 rate limit errors on the Gemini free tier (15 RPM). Do not remove it.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Agent 2 remains mandatory. It validates and repairs the complete Agent 1 output after streaming finishes.
+- Add lightweight deterministic checks before Agent 2, but only after `agent1_done`:
+  - `map.ditamap` exists.
+  - Topicref hrefs point to generated topic files.
+  - XML is basically well formed using `fast-xml-parser`.
+  - Every `<image href="images/...">` points to an available extracted asset.
+  - Every image has `<alt>`.
+- Pass deterministic issues into Agent 2 as repair context.
+- Prompt source is `docs/prompts-context/api_generate_prompt.md`; copy/adapt the runtime Agent 2 validation prompt into `src/lib/prompts.ts`.
+- Use `@google/genai` with `GEMINI_VALIDATE_MODEL`, defaulting to `gemini-2.0-flash`.
+- Agent 2 should return final repaired files plus a structured validation report. Final files from Agent 2 are the only files used for ZIP upload and final editor tabs.
+
 

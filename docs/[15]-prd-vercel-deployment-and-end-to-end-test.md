@@ -46,4 +46,28 @@ Must be the final step. Run this at least 30 minutes before the demo to allow ti
 | *If DITA-OT validation is not available on Vercel (Java process), demonstrate validation using the live Agent 2 report in the UI instead. The Agent 2 validation panel is sufficient evidence of structural correctness for the demo.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Production env vars should include:
+  - `GEMINI_API_KEY`
+  - `GEMINI_CLASSIFY_MODEL`
+  - `GEMINI_GENERATE_MODEL`
+  - `GEMINI_VALIDATE_MODEL`
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `EXTRACT_API_URL`
+- Validate that the deployed Python extractor function supports the expanded image-aware response shape or degrades gracefully without images.
+- End-to-end validation should cover:
+  1. PDF upload through `/api/jobs`.
+  2. `/api/generate` single SSE stream.
+  3. Live Agent 1 Monaco preview.
+  4. Agent 2 validation report.
+  5. Final XML tabs.
+  6. ZIP download from public Supabase Storage.
+  7. ZIP contains XML and only referenced images under `images/`.
+- If OCR fallback is not enabled yet, test that sparse/scanned PDFs produce a clear message rather than a confusing pipeline failure.
+
 

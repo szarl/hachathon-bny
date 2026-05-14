@@ -46,4 +46,38 @@ See PDF extractor implementation in api\_classify\_prompt.md, section "PDF extra
 | *Install pdfplumber on the machine before the hackathon: pip install pdfplumber. Verify python3 \-c "import pdfplumber; print('ok')" prints ok.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- PDF parsing belongs to the deployed Python/Vercel extractor function, not a new TypeScript subprocess route.
+- Local development can keep the existing `next.config.ts` rewrite from `/api/extract` to `http://127.0.0.1:8001/api/extract`.
+- Production should use `EXTRACT_API_URL` or an equivalent Vercel route to reach the deployed Python extractor.
+- The extractor response should expand from plain text pages to document structure plus assets:
+
+```ts
+type ExtractedPage = {
+  pageNumber: number;
+  text: string;
+  fontSizes: number[];
+  source?: "pdfplumber" | "ocr";
+  images?: ExtractedImage[];
+};
+
+type ExtractedImage = {
+  filename: string;
+  pageNumber: number;
+  caption?: string;
+  width?: number;
+  height?: number;
+  dataBase64?: string;
+  mimeType: "image/png" | "image/jpeg";
+  skipped?: boolean;
+  warning?: string;
+};
+```
+
+- Image extraction should happen in Python. The first implementation should support embedded/raster PDF images and cap base64 payloads at about 2 MB per image and 10 MB total per PDF.
+- OCR should be an optional fallback stage after the core text/image pipeline works. OCR output must normalize back into the same `ExtractedPage` shape.
+
 

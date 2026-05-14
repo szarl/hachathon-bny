@@ -70,4 +70,18 @@ create policy "public update" on jobs for update using (true);
 | *The status column uses plain text, not an enum, to avoid migration complexity during the hackathon. Valid values are: pending, extracting, classifying, generating, validating, saving, done, error.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Add `metadata jsonb default '{}'::jsonb` to `jobs` for flexible demo metadata such as file count, topic count, asset count, and validation summary.
+- Valid status values now include optional `ocr` in addition to: `pending`, `extracting`, `classifying`, `generating`, `validating`, `saving`, `done`, and `error`.
+- Public RLS should allow read-only access for the browser history and realtime UI.
+- Do not allow public insert/update. All writes should go through server routes using `SUPABASE_SERVICE_ROLE_KEY`.
+- Buckets should be public for hackathon speed:
+  - `uploads`: public, 50 MB max
+  - `outputs`: public
+- Add an idempotent migration file in `supabase/migrations/001_initial_schema.sql`.
+- Add Supabase setup notes in `supabase/README.md`, including bucket creation and realtime enablement.
+
 

@@ -43,3 +43,5 @@ Implementation cautions:
 - Monaco must be dynamically imported with SSR disabled.
 - `/api/generate` is expected to stream Server-Sent Events and run Agent 1 followed by Agent 2 in the same request.
 - The PRD pack references support files such as `two_agent_gemini_pipeline.md` and `api_classify_prompt.md`; verify whether they exist before implementing prompt-heavy routes.
+
+After completing PRD, commit push and validate build on vercel

@@ -41,4 +41,17 @@ This is the entry point of the user flow. It orchestrates the three sequential A
 | *documentTitle should be derived from the PDF filename with the .pdf extension removed and hyphens/underscores replaced with spaces. This becomes the \<title\> of the ditamap.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- UploadZone should upload exactly one PDF to `POST /api/jobs`, not directly to Supabase.
+- Enforce PDF-only and 50 MB max before upload.
+- Button phases before SSE:
+  - `Uploading...`
+  - `Starting conversion...`
+- After `/api/jobs` returns `jobId`, call `startConversion({ jobId, documentTitle })`.
+- Do not call `/api/extract` or `/api/classify` from the browser.
+- `productName` is fixed internally as `BNY Platform`; do not add a UI field for it in the first build.
+
 

@@ -40,4 +40,19 @@ Reads from useConversionStream state. This component is the primary visual feedb
 | *The validation issues list is the most impressive UI element for judges. Make it clearly visible — not hidden behind a tiny toggle. Show it expanded by default when issuesFixed \> 0\.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Keep the primary progress indicator at five stages:
+  1. Extracting PDF
+  2. Classifying topics
+  3. Agent 1 generating
+  4. Agent 2 validating
+  5. Complete
+- Treat upload/job creation as a pre-pipeline button state, not a progress step.
+- Show OCR fallback, image extraction, asset packaging, and saving as sub-status text under the active stage.
+- Validation issues should combine deterministic checks and Agent 2 results into one user-facing report.
+- Show asset counts subtly in the final summary, for example `4 XML files - 2 images - ZIP ready`.
+
 

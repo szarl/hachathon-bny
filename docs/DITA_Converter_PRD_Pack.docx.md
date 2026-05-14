@@ -11,6 +11,8 @@ May 14, 2026  ·  Confidential
 
 *Stack: Next.js 14 · TypeScript · Gemini 2.0 Flash · Supabase · Vercel · Monaco Editor*
 
+> **Implementation update — May 13, 2026:** This imported PRD pack is no longer the only source of implementation truth. Use `docs/architecture-decisions.md` plus the split PRD files as the current plan. The key updates are: backend-owned pipeline after `/api/jobs`, deployed Python extractor boundary, `@google/genai`, split Gemini model env vars, public demo buckets with server-owned writes, image asset extraction, optional OCR fallback, and one `/api/generate` SSE stream.
+
 # **Document overview**
 
 This document contains 15 Product Requirements Documents (PRDs) for the DITA Conversion Tool. Each PRD is self-contained and written for direct execution by an AI agent or developer. They are ordered by dependency — complete them in sequence.
@@ -854,4 +856,3 @@ All variables must be present in .env.local for local development and in Vercel 
 
 | *End 2 seconds early. Invite questions. Never run over time.* |
 | :---- |
-

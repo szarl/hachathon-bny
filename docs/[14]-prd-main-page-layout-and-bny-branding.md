@@ -40,4 +40,16 @@ Judges are from BNY. Matching their brand palette signals attention to detail. S
 | *BNY colour reference: Navy \#0C2340, Blue \#185FA5, Light blue \#E6F1FB. Do not spend more than 20 minutes on styling — a functional ugly tool beats a beautiful broken one.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Keep the app unauthenticated and demo-focused.
+- Use `BNY Platform` as the fixed product name for generated keydefs.
+- First screen should be the usable converter, not a marketing landing page.
+- Left column owns upload, progress, validation summary, and download.
+- Right column owns Monaco live/final XML output.
+- Show image support through final asset counts and XML references, not image preview cards.
+- Avoid adding product-name controls, auth controls, or destructive history actions in the first build.
+
 

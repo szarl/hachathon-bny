@@ -51,4 +51,22 @@ Full implementation in two\_agent\_gemini\_pipeline.md, section "Storage upload"
 | *The files SSE event is what populates the Monaco editor tabs. It must be sent before the done event so the UI has the file content before showing the download button.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- ZIP contents should include final validated XML files and only image assets referenced by those XML files.
+- Store images under `images/` inside the ZIP.
+- Do not include unused extracted images in the final ZIP.
+- Output upload path should be unique: `outputs/{jobId}/{timestamp}-dita_output.zip`.
+- The `files` SSE event should include XML text files only.
+- Add a separate `assets` event or final metadata for asset summaries; do not send base64 asset payloads over SSE.
+- Update `jobs.metadata` with useful counts:
+  - `topicCount`
+  - `fileCount`
+  - `usedAssetCount`
+  - `skippedAssetCount`
+  - `validationPassed`
+  - `validationIssueCount`
+
 

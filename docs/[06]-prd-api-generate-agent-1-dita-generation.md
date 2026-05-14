@@ -51,4 +51,29 @@ Full implementation in two\_agent\_gemini\_pipeline.md, section "/app/api/genera
 | *Agent 1 does NOT call Agent 2\. Agent 2 is called after Agent 1 completes, still inside the same SSE stream. Both agents run sequentially inside the single POST /api/generate handler.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- `/api/generate` should own the full pipeline after job creation: extract, optional OCR, classify, Agent 1, deterministic checks, Agent 2, ZIP upload, and completion.
+- The request body should be `{ jobId, documentTitle }`. `productName` is fixed internally as `BNY Platform`.
+- Prompt source is `docs/prompts-context/api_generate_prompt.md`; copy the runtime Agent 1 prompt into `src/lib/prompts.ts`.
+- Use `@google/genai` with `GEMINI_GENERATE_MODEL`, defaulting to `gemini-2.0-flash`.
+- Agent 1 must stream delimiter-based plain text, not JSON or markdown:
+
+```text
+%%FILE:c_example_concept.dita%%
+<?xml version="1.0" encoding="UTF-8"?>
+...
+
+%%FILE:map.ditamap%%
+<?xml version="1.0" encoding="UTF-8"?>
+...
+%%END%%
+```
+
+- Use fixed `map.ditamap`.
+- During streaming, Monaco receives a raw live preview only. Do not validate partial XML.
+- If `parseFiles()` fails after streaming completes, do one non-streamed formatting repair retry before returning an error.
+
 

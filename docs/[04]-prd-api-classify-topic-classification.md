@@ -51,4 +51,31 @@ Full implementation in api\_classify\_prompt.md, section "Full Next.js API route
 | *The classify route does NOT stream. It makes a single blocking call to Gemini and returns the full JSON. The 15 RPM free tier limit means classify \+ generate together \= 2 calls; add await new Promise(r \=\> setTimeout(r, 2000)) between them if hitting 429s.* |
 | :---- |
 
+## **Implementation update — May 13, 2026**
+
+Use [architecture-decisions.md](architecture-decisions.md) as the shared refinement layer for this PRD.
+
+- Classification should run inside the backend-owned `/api/generate` pipeline, not as a browser-orchestrated standalone call.
+- A standalone helper/route is optional for testing, but the production user flow should be: `/api/jobs` then `/api/generate`.
+- Prompt source is `docs/prompts-context/api_classify_prompt.md`; copy the runtime system prompt into `src/lib/prompts.ts`.
+- Use `@google/genai` with `GEMINI_CLASSIFY_MODEL`, defaulting to `gemini-2.0-flash`.
+- Extend classified topics with source and image hints:
+
+```ts
+type ClassifiedTopic = {
+  type: "concept" | "task" | "reference";
+  title: string;
+  suggestedFilename: string;
+  confidence: "high" | "medium" | "low";
+  splitReason: string | null;
+  content: string;
+  sourcePages?: number[];
+  relatedImages?: string[];
+};
+```
+
+- Repair fenced/broken JSON once.
+- Normalize filenames to safe lowercase snake case with `c_`, `t_`, or `r_` prefixes.
+- Fail clearly if classification returns no usable topics.
+
 
