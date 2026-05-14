@@ -62,6 +62,11 @@ function expectedOtBin(dir: string): string {
   return join(dir, "bin", process.platform === "win32" ? "dita.bat" : "dita");
 }
 
+/** Internal preprocess map shipped with `org.dita.base` (DOTA069F if missing — incomplete unzip). */
+function expectedOtBasePipelineMap(dir: string): string {
+  return join(dir, "plugins", "org.dita.base", "ditamapmap.ditamap");
+}
+
 function enrichSpawnENOENT(message: string, cli: string): string {
   if (!message.includes("ENOENT") && !(message.includes("spawnSync") && message.includes("not found"))) {
     return message;
@@ -197,6 +202,20 @@ export function runDitaOtHtml5(
 
   if (cli !== "dita" && !existsSync(cli)) {
     return { status: "failed", message: `DITA-OT shell not found: ${cli}` };
+  }
+
+  const otRoot = process.env.DITA_OT_DIR?.trim();
+  if (otRoot) {
+    const pipelineMap = expectedOtBasePipelineMap(otRoot);
+    if (!existsSync(pipelineMap)) {
+      return {
+        status: "failed",
+        message:
+          `DITA-OT install under DITA_OT_DIR is incomplete (missing ${relative(otRoot, pipelineMap) || "plugins\\org.dita.base\\ditamapmap.ditamap"}). ` +
+          "Re-download the official DITA-OT zip from https://github.com/dita-ot/dita-ot/releases , extract to a new folder, " +
+          "confirm that file exists, set DITA_OT_DIR to that root, and retry. Antivirus or a partial copy can strip plugin files.",
+      };
+    }
   }
 
   const workspace = mkdtempSync(join(tmpdir(), "dita-ot-"));

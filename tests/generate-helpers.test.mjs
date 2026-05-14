@@ -130,6 +130,7 @@ test("buildGenerateUserMessage fixes BNY Platform and map.ditamap instructions",
   assert.match(message, /- c_manage_2a7_processing\.dita/);
   assert.match(message, /Emit exactly 1 topic file with these names/);
   assert.match(message, /<shortdesc/);
+  assert.match(message, /For every Related images entry/);
   assert.match(message, /fixed map\.ditamap file/);
 });
 
@@ -255,6 +256,74 @@ test("runDeterministicChecks accepts non-self-closing images with alt text", asy
 
   assert.equal(issues.some((issue) => issue.rule === "IMAGE_ALT_TEXT"), false);
   assert.equal(issues.some((issue) => issue.rule === "IMAGE_REFERENCES"), false);
+});
+
+test("runDeterministicChecks reports missing required topic files", async () => {
+  const { runDeterministicChecks } = await loadGenerateHelpers();
+
+  const issues = await runDeterministicChecks(
+    {
+      "c_intro.dita": "<concept/>",
+      "map.ditamap": '<map><topicref href="c_intro.dita"/></map>',
+    },
+    [],
+    ["c_intro.dita", "t_missing.dita", "map.ditamap"],
+  );
+
+  assert.ok(issues.some((issue) => issue.rule === "REQUIRED_FILES" && issue.file === "t_missing.dita"));
+});
+
+test("preserveRequiredFiles restores files dropped by validation", async () => {
+  const { preserveRequiredFiles } = await loadGenerateHelpers();
+
+  const files = preserveRequiredFiles(
+    { "c_intro.dita": "<concept/>", "map.ditamap": "<map/>" },
+    { "c_intro.dita": "<concept/>", "t_steps.dita": "<task/>", "map.ditamap": "<map/>" },
+    ["c_intro.dita", "t_steps.dita", "map.ditamap"],
+  );
+
+  assert.equal(files["t_steps.dita"], "<task/>");
+});
+
+test("ensureRelatedImageFigures inserts missing referenced figures for topic images", async () => {
+  const { ensureRelatedImageFigures, runDeterministicChecks } = await loadGenerateHelpers();
+
+  const files = ensureRelatedImageFigures(
+    {
+      "c_set_up_entities_for_caps.dita":
+        '<concept id="concept-1111"><title>Set Up Entities for Caps and Floors</title><shortdesc class="- topic/shortdesc ">About netting.</shortdesc><conbody><p>Body.</p></conbody></concept>',
+      "map.ditamap": '<map><topicref href="c_set_up_entities_for_caps.dita"/></map>',
+    },
+    [
+      {
+        type: "concept",
+        title: "Set Up Entities for Caps and Floors",
+        suggestedFilename: "c_set_up_entities_for_caps",
+        confidence: "high",
+        splitReason: null,
+        content: "About netting.",
+        sourcePages: [6],
+        relatedImages: ["page_06_image_01.png"],
+      },
+    ],
+    [
+      {
+        filename: "page_06_image_01.png",
+        pageNumber: 6,
+        mimeType: "image/png",
+        caption: "Set Up Entities for Caps and Floors",
+        dataBase64: Buffer.from("image").toString("base64"),
+      },
+    ],
+  );
+
+  assert.match(files["c_set_up_entities_for_caps.dita"], /<fig class="- topic\/fig ">/);
+  assert.match(files["c_set_up_entities_for_caps.dita"], /href="images\/page_06_image_01\.png"/);
+  assert.match(files["c_set_up_entities_for_caps.dita"], /<alt class="- topic\/alt ">Set Up Entities for Caps and Floors<\/alt>/);
+
+  const issues = await runDeterministicChecks(files, ["images/page_06_image_01.png"]);
+  assert.equal(issues.some((issue) => issue.rule === "IMAGE_REFERENCES"), false);
+  assert.equal(issues.some((issue) => issue.rule === "IMAGE_ALT_TEXT"), false);
 });
 
 test("pickXmlTextFilesForSse keeps only .dita and .ditamap entries for Monaco SSE", async () => {

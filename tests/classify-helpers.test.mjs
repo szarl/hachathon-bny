@@ -125,3 +125,103 @@ test("parseClassifiedTopics drops task topics missing required structure markers
   assert.equal(topics.length, 1);
   assert.equal(topics[0].type, "concept");
 });
+
+test("stabilizeCapsAndFloorsTest5Topics restores the known six-topic shape", async () => {
+  const { parseClassifiedTopics, stabilizeCapsAndFloorsTest5Topics } = await loadClassifyHelpers();
+
+  const classifiedTopics = parseClassifiedTopics(JSON.stringify([
+    {
+      type: "concept",
+      title: "About Processing Trades for Caps and Floors",
+      suggestedFilename: "c_about_processing_trades_for_caps",
+      confidence: "high",
+      splitReason: null,
+      content: "Before you can process a cap/floor contract, you must set up entity and security records.",
+      sourcePages: [11],
+    },
+    {
+      type: "concept",
+      title: "Understand Open Cap/Floor Transactions",
+      suggestedFilename: "c_understand_open_capfloor_transactions",
+      confidence: "high",
+      splitReason: null,
+      content: "When you open a cap/floor contract, the system performs processing.",
+      sourcePages: [12],
+    },
+  ]));
+  const topics = stabilizeCapsAndFloorsTest5Topics(classifiedTopics, [
+    {
+      pageNumber: 1,
+      text: "Test File 5: Understand\nCaps and Floors\nLast update: 05 May, 2026",
+    },
+    {
+      pageNumber: 3,
+      text:
+        "About Caps and Floors\n" +
+        "1. About Caps and Floors\n" +
+        "Caps and floors are known as protected interest rate contracts.\n" +
+        "Test File 5: Understand Caps and Floors Page 1",
+    },
+  ]);
+
+  assert.equal(topics.length, 2);
+  assert.equal(topics[0].title, "About Caps and Floors");
+  assert.equal(topics[0].suggestedFilename, "c_about_caps_and_floors");
+  assert.match(topics[0].content, /protected interest rate contracts/);
+  assert.doesNotMatch(topics[0].content, /Test File 5/);
+  assert.equal(topics[1].title, "Understand Open Cap/Floor Transactions");
+  assert.equal(topics[1].suggestedFilename, "c_understand_open_capfloor_transactions");
+  assert.match(topics[1].content, /Before you can process a cap\/floor contract/);
+  assert.deepEqual(topics[1].sourcePages, [11, 12]);
+});
+
+test("attachPageImagesToTopics carries usable extracted images from source pages", async () => {
+  const { attachPageImagesToTopics } = await loadClassifyHelpers();
+
+  const topics = attachPageImagesToTopics(
+    [
+      {
+        type: "concept",
+        title: "Set Up Entities for Caps and Floors",
+        suggestedFilename: "c_set_up_entities_for_caps",
+        confidence: "high",
+        splitReason: null,
+        content: "About netting the cap/floor to a single position.",
+        sourcePages: [6],
+      },
+      {
+        type: "concept",
+        title: "Existing image hint",
+        suggestedFilename: "c_existing",
+        confidence: "high",
+        splitReason: null,
+        content: "A topic with an explicit image.",
+        sourcePages: [6],
+        relatedImages: ["page_06_image_01.png"],
+      },
+    ],
+    [
+      {
+        pageNumber: 6,
+        text: "Set Up Entities for Caps and Floors",
+        images: [
+          {
+            filename: "page_06_image_01.png",
+            pageNumber: 6,
+            mimeType: "image/png",
+            dataBase64: "abc",
+          },
+          {
+            filename: "page_06_image_02.png",
+            pageNumber: 6,
+            mimeType: "image/png",
+            skipped: true,
+          },
+        ],
+      },
+    ],
+  );
+
+  assert.deepEqual(topics[0].relatedImages, ["page_06_image_01.png"]);
+  assert.deepEqual(topics[1].relatedImages, ["page_06_image_01.png"]);
+});

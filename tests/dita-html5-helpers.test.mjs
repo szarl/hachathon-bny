@@ -100,3 +100,35 @@ test("resolveDitaCliPath returns null when DITA_OT_DIR is set but bin is missing
     process.env.DITA_OT_DIR = prev;
   }
 });
+
+test("runDitaOtHtml5 fails early when DITA_OT_DIR is missing org.dita.base pipeline map", async () => {
+  const { runDitaOtHtml5 } = await loadDitaHtml5Helpers();
+
+  const dir = mkdtempSync(join(tmpdir(), "incomplete-dita-"));
+  const binDir = join(dir, "bin");
+  mkdirSync(binDir, { recursive: true });
+  const binName = process.platform === "win32" ? "dita.bat" : "dita";
+  writeFileSync(join(binDir, binName), process.platform === "win32" ? "@echo off\n" : "#!/bin/sh\n");
+
+  const prevDir = process.env.DITA_OT_DIR;
+  const prevEnabled = process.env.DITA_OT_ENABLED;
+  process.env.DITA_OT_DIR = dir;
+  process.env.DITA_OT_ENABLED = "true";
+  try {
+    const r = runDitaOtHtml5({ "map.ditamap": "<map/>" });
+    assert.equal(r.status, "failed");
+    assert.match(r.message, /ditamapmap|incomplete/i);
+  } finally {
+    if (prevDir !== undefined) {
+      process.env.DITA_OT_DIR = prevDir;
+    } else {
+      delete process.env.DITA_OT_DIR;
+    }
+    if (prevEnabled !== undefined) {
+      process.env.DITA_OT_ENABLED = prevEnabled;
+    } else {
+      delete process.env.DITA_OT_ENABLED;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

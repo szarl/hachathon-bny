@@ -145,6 +145,7 @@ export function buildGenerateUserMessage(req: GenerateRequest, options?: BuildGe
     `${topicList}\n\n` +
     "Output one .dita file per topic plus one fixed map.ditamap file.\n" +
     "Each concept, task, and reference topic must include <shortdesc class=\"- topic/shortdesc \"> immediately after <title> (1–2 sentences: purpose for link previews and search).\n" +
+    "For every Related images entry on a topic, include a DITA <fig> in that topic with <image href=\"images/{filename}\" class=\"- topic/image \"> and non-empty <alt> text.\n" +
     "Use the %%FILE:filename%% and %%END%% delimiters.\n" +
     "The ditamap must be named map.ditamap and must be the last file."
   );
@@ -259,9 +260,26 @@ export function validationResultWithoutAgent2(
   };
 }
 
+export function preserveRequiredFiles(
+  files: Record<string, string>,
+  fallbackFiles: Record<string, string>,
+  requiredFiles: string[],
+): Record<string, string> {
+  const next = { ...files };
+
+  for (const filename of requiredFiles) {
+    if (!next[filename] && fallbackFiles[filename]) {
+      next[filename] = fallbackFiles[filename];
+    }
+  }
+
+  return next;
+}
+
 export async function runDeterministicChecks(
   files: Record<string, string>,
   availableAssets: string[] = [],
+  requiredFiles: string[] = [],
 ): Promise<ValidationIssue[]> {
   const issues: ValidationIssue[] = [];
   const filenames = new Set(Object.keys(files));
@@ -276,6 +294,7 @@ export async function runDeterministicChecks(
     });
   }
 
+  addRequiredFileIssues(requiredFiles, filenames, issues);
   await addXmlWellFormedIssues(files, issues);
   addMapCompletenessIssues(files, filenames, issues);
   addImageIssues(files, new Set(availableAssets), issues);
@@ -285,6 +304,67 @@ export async function runDeterministicChecks(
 
 export function collectExtractedAssets(pages: ExtractedPage[]): ExtractedAsset[] {
   return pages.flatMap((page) => page.images ?? []);
+}
+
+export function expectedFilesForTopics(topics: ClassifiedTopic[]): string[] {
+  return [...topics.map((topic) => ensureDitaExtension(topic.suggestedFilename)), "map.ditamap"];
+}
+
+export function ensureRelatedImageFigures(
+  files: Record<string, string>,
+  topics: ClassifiedTopic[],
+  assets: ExtractedAsset[] = [],
+): Record<string, string> {
+  if (topics.every((topic) => !topic.relatedImages?.length)) {
+    return files;
+  }
+
+  const assetByFilename = new Map(
+    assets.map((asset) => [normalizeAssetFilename(asset.filename), asset]),
+  );
+  const next = { ...files };
+
+  for (const topic of topics) {
+    const filename = ensureDitaExtension(topic.suggestedFilename);
+    const content = next[filename];
+    const relatedImages = topic.relatedImages ?? [];
+
+    if (!content || relatedImages.length === 0) {
+      continue;
+    }
+
+    const figures = relatedImages
+      .map((imageName) => {
+        const assetName = normalizeAssetFilename(imageName);
+        const asset = assetByFilename.get(assetName);
+
+        if (asset && (asset.skipped || !asset.dataBase64)) {
+          return "";
+        }
+
+        const href = `images/${assetName}`;
+        if (content.includes(`href="${href}"`) || content.includes(`href='${href}'`)) {
+          return "";
+        }
+
+        const safeCaption = escapeXmlText(figureCaption(asset, topic.title));
+        const safeAlt = escapeXmlText(altText(asset, topic.title));
+
+        return (
+          `<fig class="- topic/fig "><title class="- topic/title ">${safeCaption}</title>` +
+          `<image href="${href}" placement="break" class="- topic/image ">` +
+          `<alt class="- topic/alt ">${safeAlt}</alt></image></fig>`
+        );
+      })
+      .filter(Boolean)
+      .join("");
+
+    if (figures) {
+      next[filename] = insertFigures(content, figures);
+    }
+  }
+
+  return next;
 }
 
 /** Subset of `files` for SSE `files` events: XML topics and ditamaps only (no stray JSON keys). */
@@ -510,6 +590,51 @@ function ensureDitaExtension(filename: string): string {
     : `${filename}.dita`;
 }
 
+function normalizeAssetFilename(filename: string): string {
+  return filename.replace(/\\/g, "/").split("/").pop()?.trim() || filename.trim();
+}
+
+function figureCaption(asset: ExtractedAsset | undefined, topicTitle: string): string {
+  const caption = asset?.caption?.trim();
+  return caption || `${topicTitle} figure`;
+}
+
+function altText(asset: ExtractedAsset | undefined, topicTitle: string): string {
+  const caption = asset?.caption?.trim();
+  return caption || `Figure related to ${topicTitle}`;
+}
+
+function escapeXmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function insertFigures(content: string, figures: string): string {
+  const bodyClose = content.match(/<\/(?:conbody|refbody)>/);
+  if (bodyClose?.index != null) {
+    return content.slice(0, bodyClose.index) + figures + content.slice(bodyClose.index);
+  }
+
+  const contextClose = content.match(/<\/context>/);
+  if (contextClose?.index != null) {
+    return content.slice(0, contextClose.index) + figures + content.slice(contextClose.index);
+  }
+
+  const taskBodyClose = content.match(/<\/taskbody>/);
+  if (taskBodyClose?.index != null) {
+    return content.slice(0, taskBodyClose.index) + figures + content.slice(taskBodyClose.index);
+  }
+
+  const topicClose = content.match(/<\/(?:concept|task|reference)>/);
+  if (topicClose?.index != null) {
+    return content.slice(0, topicClose.index) + figures + content.slice(topicClose.index);
+  }
+
+  return content;
+}
+
 function getReferencedAssetPaths(files: Record<string, string>): Set<string> {
   const paths = new Set<string>();
 
@@ -524,6 +649,24 @@ function getReferencedAssetPaths(files: Record<string, string>): Set<string> {
   }
 
   return paths;
+}
+
+function addRequiredFileIssues(
+  requiredFiles: string[],
+  filenames: Set<string>,
+  issues: ValidationIssue[],
+): void {
+  for (const filename of requiredFiles) {
+    if (!filenames.has(filename)) {
+      issues.push({
+        rule: "REQUIRED_FILES",
+        severity: "error",
+        file: filename,
+        message: `Required generated file "${filename}" is missing.`,
+        fixed: false,
+      });
+    }
+  }
 }
 
 function normalizeAssetPath(filename: string): string {

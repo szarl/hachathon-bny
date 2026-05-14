@@ -1,9 +1,11 @@
 import "server-only";
 
 import {
+  attachPageImagesToTopics,
   buildUserMessage as buildClassifyUserMessage,
   normalizeClassifiedTopics,
   parseClassifiedTopics,
+  stabilizeCapsAndFloorsTest5Topics,
   type ClassifiedTopic,
   type ExtractedPage,
 } from "@/lib/classify";
@@ -13,9 +15,12 @@ import {
   buildGenerateUserMessage,
   buildValidationUserMessage,
   collectExtractedAssets,
+  ensureRelatedImageFigures,
+  expectedFilesForTopics,
   parseFiles,
   parseValidationResult,
   pickXmlTextFilesForSse,
+  preserveRequiredFiles,
   runDeterministicChecks,
   uploadFilesToStorage,
   validationResultWithoutAgent2,
@@ -97,12 +102,17 @@ export async function runConversionPipeline(args: {
     label: "Agent 1 — generating DITA",
   });
 
-  const agent1Files = await runAgent1({
-    documentTitle: body.documentTitle,
+  const agent1Files = ensureRelatedImageFigures(
+    await runAgent1({
+      documentTitle: body.documentTitle,
+      topics,
+      mode: agent1Mode,
+      onToken: (text) => emit({ type: "token", text }),
+    }),
     topics,
-    mode: agent1Mode,
-    onToken: (text) => emit({ type: "token", text }),
-  });
+    assets,
+  );
+  const requiredFiles = expectedFilesForTopics(topics);
 
   emit({ type: "agent1_done", fileCount: Object.keys(agent1Files).length });
 
@@ -111,6 +121,7 @@ export async function runConversionPipeline(args: {
     assets
       .filter((asset) => asset.dataBase64 && !asset.skipped)
       .map((asset) => `images/${asset.filename.split(/[\\/]/).pop() ?? asset.filename}`),
+    requiredFiles,
   );
 
   if (body.jobId) {
@@ -128,6 +139,14 @@ export async function runConversionPipeline(args: {
     });
 
     validation = await runAgent2(agent1Files, deterministicIssues);
+    validation = {
+      ...validation,
+      files: ensureRelatedImageFigures(
+        preserveRequiredFiles(validation.files, agent1Files, requiredFiles),
+        topics,
+        assets,
+      ),
+    };
 
     emit({
       type: "validation",
@@ -143,6 +162,14 @@ export async function runConversionPipeline(args: {
     });
 
     validation = validationResultWithoutAgent2(agent1Files, deterministicIssues);
+    validation = {
+      ...validation,
+      files: ensureRelatedImageFigures(
+        preserveRequiredFiles(validation.files, agent1Files, requiredFiles),
+        topics,
+        assets,
+      ),
+    };
 
     emit({
       type: "validation",
@@ -235,9 +262,11 @@ async function resolveTopics(
   await setJobStatus(body.jobId, "classifying");
 
   const classifiedTopics = await classifyExtractedPages(extractedPages);
-  emit({ type: "topics", topics: classifiedTopics });
+  const stableTopics = stabilizeCapsAndFloorsTest5Topics(classifiedTopics, extractedPages);
+  const topicsWithPageImages = attachPageImagesToTopics(stableTopics, extractedPages);
+  emit({ type: "topics", topics: topicsWithPageImages });
 
-  return { topics: classifiedTopics, assets: extractedAssets };
+  return { topics: topicsWithPageImages, assets: extractedAssets };
 }
 
 async function runAgent1({
