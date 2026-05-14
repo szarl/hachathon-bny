@@ -18,13 +18,15 @@ import {
   pickXmlTextFilesForSse,
   runDeterministicChecks,
   uploadFilesToStorage,
+  validationResultWithoutAgent2,
   type AssetSummary,
   type ExtractedAsset,
   type JobMetadata,
   type ValidationIssue,
   type ValidationResult,
 } from "@/lib/generate";
-import { geminiModels, getGeminiClient } from "@/lib/gemini";
+import { withGeminiRetries } from "@/lib/gemini-retry";
+import { geminiModels, getGeminiClient, isGeminiAgent2Enabled } from "@/lib/gemini";
 import { getErrorMessage, setJobStatus as updateJobStatus } from "@/lib/jobs";
 import { AGENT_1_SYSTEM_PROMPT, AGENT_2_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -49,7 +51,7 @@ type SseEvent =
   | { type: "topics"; topics: ClassifiedTopic[] }
   | { type: "token"; text: string }
   | { type: "agent1_done"; fileCount: number }
-  | { type: "validation"; passed: boolean; issueCount: number; issues: ValidationIssue[] }
+  | { type: "validation"; passed: boolean; issueCount: number; issues: ValidationIssue[]; agent2Skipped?: boolean }
   | { type: "files"; files: Record<string, string> }
   | { type: "assets"; assets: AssetSummary[] }
   | { type: "done"; outputUrl: string; metadata: JobMetadata }
@@ -103,30 +105,53 @@ export async function POST(req: NextRequest) {
 
         send({ type: "agent1_done", fileCount: Object.keys(agent1Files).length });
 
-        if (body.jobId) {
-          await setJobStatus(body.jobId, "validating");
-        }
-
-        send({
-          type: "stage",
-          stage: "validating",
-          label: "Agent 2 — validating XML",
-        });
-
         const deterministicIssues = await runDeterministicChecks(
           agent1Files,
           assets
             .filter((asset) => asset.dataBase64 && !asset.skipped)
             .map((asset) => `images/${asset.filename.split(/[\\/]/).pop() ?? asset.filename}`),
         );
-        const validation = await runAgent2(agent1Files, deterministicIssues);
 
-        send({
-          type: "validation",
-          passed: validation.passed,
-          issueCount: validation.issueCount,
-          issues: validation.issues,
-        });
+        if (body.jobId) {
+          await setJobStatus(body.jobId, "validating");
+        }
+
+        const agent2Enabled = isGeminiAgent2Enabled();
+
+        let validation: ValidationResult;
+
+        if (agent2Enabled) {
+          send({
+            type: "stage",
+            stage: "validating",
+            label: "Agent 2 — validating XML",
+          });
+
+          validation = await runAgent2(agent1Files, deterministicIssues);
+
+          send({
+            type: "validation",
+            passed: validation.passed,
+            issueCount: validation.issueCount,
+            issues: validation.issues,
+          });
+        } else {
+          send({
+            type: "stage",
+            stage: "validating",
+            label: "Agent 2 skipped (GEMINI_AGENT2_ENABLED=false)",
+          });
+
+          validation = validationResultWithoutAgent2(agent1Files, deterministicIssues);
+
+          send({
+            type: "validation",
+            passed: validation.passed,
+            issueCount: validation.issueCount,
+            issues: validation.issues,
+            agent2Skipped: true,
+          });
+        }
 
         if (body.jobId) {
           await setJobStatus(body.jobId, "saving");
@@ -215,14 +240,16 @@ async function runAgent1({
 }): Promise<Record<string, string>> {
   const ai = getGeminiClient();
   const userMessage = buildGenerateUserMessage({ documentTitle, topics });
-  const stream = await ai.models.generateContentStream({
-    model: geminiModels.generate,
-    contents: userMessage,
-    config: {
-      systemInstruction: AGENT_1_SYSTEM_PROMPT,
-      temperature: 0.1,
-    },
-  });
+  const stream = await withGeminiRetries(() =>
+    ai.models.generateContentStream({
+      model: geminiModels.generate,
+      contents: userMessage,
+      config: {
+        systemInstruction: AGENT_1_SYSTEM_PROMPT,
+        temperature: 0.1,
+      },
+    }),
+  );
 
   let fullText = "";
 
@@ -249,44 +276,50 @@ async function runAgent2(
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: geminiModels.validate,
-    contents: buildValidationUserMessage({ files, deterministicIssues }),
-    config: {
-      systemInstruction: AGENT_2_SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-      maxOutputTokens: 8192,
-      temperature: 0,
-    },
-  });
+  const response = await withGeminiRetries(() =>
+    ai.models.generateContent({
+      model: geminiModels.validate,
+      contents: buildValidationUserMessage({ files, deterministicIssues }),
+      config: {
+        systemInstruction: AGENT_2_SYSTEM_PROMPT,
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+        temperature: 0,
+      },
+    }),
+  );
 
   return parseValidationResult(response.text ?? "");
 }
 
 async function repairDelimitedOutput(rawOutput: string): Promise<Record<string, string>> {
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: geminiModels.generate,
-    contents: buildFormattingRepairMessage(rawOutput),
-    config: {
-      systemInstruction: AGENT_1_SYSTEM_PROMPT,
-      temperature: 0,
-    },
-  });
+  const response = await withGeminiRetries(() =>
+    ai.models.generateContent({
+      model: geminiModels.generate,
+      contents: buildFormattingRepairMessage(rawOutput),
+      config: {
+        systemInstruction: AGENT_1_SYSTEM_PROMPT,
+        temperature: 0,
+      },
+    }),
+  );
 
   return parseFiles(response.text ?? "");
 }
 
 async function classifyExtractedPages(extractedPages: ExtractedPage[]): Promise<ClassifiedTopic[]> {
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: geminiModels.classify,
-    contents: buildClassifyUserMessage(extractedPages),
-    config: {
-      systemInstruction: CLASSIFY_SYSTEM_PROMPT,
-      temperature: 0,
-    },
-  });
+  const response = await withGeminiRetries(() =>
+    ai.models.generateContent({
+      model: geminiModels.classify,
+      contents: buildClassifyUserMessage(extractedPages),
+      config: {
+        systemInstruction: CLASSIFY_SYSTEM_PROMPT,
+        temperature: 0,
+      },
+    }),
+  );
 
   let topics: ClassifiedTopic[];
 
@@ -305,16 +338,18 @@ async function classifyExtractedPages(extractedPages: ExtractedPage[]): Promise<
 
 async function repairClassifiedJson(brokenOutput: string): Promise<ClassifiedTopic[]> {
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: geminiModels.classify,
-    contents:
-      "The following output was supposed to be a valid JSON array of ClassifiedTopic objects " +
-      "but failed to parse. Fix the JSON syntax and return only the corrected JSON array, " +
-      `no markdown fences, no explanation:\n\n${brokenOutput}`,
-    config: {
-      temperature: 0,
-    },
-  });
+  const response = await withGeminiRetries(() =>
+    ai.models.generateContent({
+      model: geminiModels.classify,
+      contents:
+        "The following output was supposed to be a valid JSON array of ClassifiedTopic objects " +
+        "but failed to parse. Fix the JSON syntax and return only the corrected JSON array, " +
+        `no markdown fences, no explanation:\n\n${brokenOutput}`,
+      config: {
+        temperature: 0,
+      },
+    }),
+  );
 
   return parseClassifiedTopics(response.text ?? "");
 }

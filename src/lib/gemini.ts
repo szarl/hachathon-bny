@@ -10,6 +10,18 @@ export const geminiModels = {
   validate: process.env.GEMINI_VALIDATE_MODEL ?? DEFAULT_GEMINI_MODEL,
 } as const;
 
+/** When false, the generate route skips the Agent 2 Gemini call; default is enabled. */
+export function isGeminiAgent2Enabled(): boolean {
+  const v = process.env.GEMINI_AGENT2_ENABLED?.trim().toLowerCase();
+  if (!v) {
+    return true;
+  }
+  if (v === "false" || v === "0" || v === "no" || v === "off") {
+    return false;
+  }
+  return true;
+}
+
 let geminiClient: GoogleGenAI | null = null;
 
 export function getGeminiClient() {

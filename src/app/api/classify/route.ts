@@ -9,6 +9,7 @@ import {
   stripJsonFences,
 } from "@/lib/classify";
 import { getErrorMessage } from "@/lib/error-message";
+import { withGeminiRetries } from "@/lib/gemini-retry";
 import { geminiModels, getGeminiClient } from "@/lib/gemini";
 import { CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 
@@ -70,30 +71,34 @@ export async function POST(req: NextRequest) {
 
 async function generateClassification(userMessage: string): Promise<string> {
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: geminiModels.classify,
-    contents: userMessage,
-    config: {
-      systemInstruction: CLASSIFY_SYSTEM_PROMPT,
-      temperature: 0,
-    },
-  });
+  const response = await withGeminiRetries(() =>
+    ai.models.generateContent({
+      model: geminiModels.classify,
+      contents: userMessage,
+      config: {
+        systemInstruction: CLASSIFY_SYSTEM_PROMPT,
+        temperature: 0,
+      },
+    }),
+  );
 
   return response.text ?? "";
 }
 
 async function repairJson(brokenOutput: string): Promise<ClassifiedTopic[]> {
   const ai = getGeminiClient();
-  const response = await ai.models.generateContent({
-    model: geminiModels.classify,
-    contents:
-      "The following output was supposed to be a valid JSON array of ClassifiedTopic objects " +
-      "but failed to parse. Fix the JSON syntax and return only the corrected JSON array, " +
-      `no markdown fences, no explanation:\n\n${stripJsonFences(brokenOutput)}`,
-    config: {
-      temperature: 0,
-    },
-  });
+  const response = await withGeminiRetries(() =>
+    ai.models.generateContent({
+      model: geminiModels.classify,
+      contents:
+        "The following output was supposed to be a valid JSON array of ClassifiedTopic objects " +
+        "but failed to parse. Fix the JSON syntax and return only the corrected JSON array, " +
+        `no markdown fences, no explanation:\n\n${stripJsonFences(brokenOutput)}`,
+      config: {
+        temperature: 0,
+      },
+    }),
+  );
 
   return parseClassifiedTopics(response.text ?? "");
 }

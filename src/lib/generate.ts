@@ -15,6 +15,8 @@ export type ValidationResult = {
   issueCount: number;
   issues: ValidationIssue[];
   files: Record<string, string>;
+  /** Set when Agent 2 was not run; output files are still Agent 1 (+ deterministic context only). */
+  agent2Skipped?: boolean;
 };
 
 export type ExtractedAsset = NonNullable<ExtractedPage["images"]>[number];
@@ -35,6 +37,8 @@ export type JobMetadata = {
   skippedAssetCount: number;
   validationPassed: boolean;
   validationIssueCount: number;
+  /** True when `GEMINI_AGENT2_ENABLED` disabled Agent 2 on the server. */
+  agent2ValidationSkipped?: boolean;
 };
 
 export type StorageUploadResult = {
@@ -171,6 +175,21 @@ export function parseValidationResult(raw: string): ValidationResult {
   };
 }
 
+/** Validation result when Agent 2 is disabled: same files as Agent 1, optional basic issues. */
+export function validationResultWithoutAgent2(
+  files: Record<string, string>,
+  deterministicIssues: ValidationIssue[],
+): ValidationResult {
+  const errors = deterministicIssues.filter((i) => i.severity === "error");
+  return {
+    passed: errors.length === 0,
+    issueCount: deterministicIssues.length,
+    issues: deterministicIssues,
+    files,
+    agent2Skipped: true,
+  };
+}
+
 export async function runDeterministicChecks(
   files: Record<string, string>,
   availableAssets: string[] = [],
@@ -212,7 +231,7 @@ export async function uploadFilesToStorage(
   jobId: string,
   files: Record<string, string>,
   assets: ExtractedAsset[] = [],
-  validation: Pick<ValidationResult, "passed" | "issueCount">,
+  validation: Pick<ValidationResult, "passed" | "issueCount" | "agent2Skipped">,
   now = new Date(),
   supabase: StorageLike,
 ): Promise<StorageUploadResult> {
@@ -268,6 +287,7 @@ export async function uploadFilesToStorage(
     skippedAssetCount: assetSummaries.length - usedAssetCount,
     validationPassed: validation.passed,
     validationIssueCount: validation.issueCount,
+    ...(validation.agent2Skipped ? { agent2ValidationSkipped: true } : {}),
   };
 
   return {

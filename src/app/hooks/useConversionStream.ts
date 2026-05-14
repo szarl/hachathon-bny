@@ -37,7 +37,7 @@ type SseEvent =
   | { type: "topics"; topics: ClassifiedTopic[] }
   | { type: "token"; text: string }
   | { type: "agent1_done"; fileCount: number }
-  | { type: "validation"; passed: boolean; issueCount: number; issues: ValidationIssue[] }
+  | { type: "validation"; passed: boolean; issueCount: number; issues: ValidationIssue[]; agent2Skipped?: boolean }
   | { type: "files"; files: Record<string, string> }
   | { type: "assets"; assets: AssetSummary[] }
   | { type: "done"; outputUrl: string; metadata: JobMetadata }
@@ -50,6 +50,8 @@ export type ConversionState = {
   topics: ClassifiedTopic[];
   validationPassed: boolean | null;
   validationIssues: ValidationIssue[];
+  /** True when server skipped the Agent 2 Gemini step (GEMINI_AGENT2_ENABLED=false). */
+  validationAgent2Skipped: boolean;
   issuesFixed: number;
   files: Record<string, string>;
   assets: AssetSummary[];
@@ -68,6 +70,7 @@ export const INITIAL_STATE: ConversionState = {
   topics: [],
   validationPassed: null,
   validationIssues: [],
+  validationAgent2Skipped: false,
   issuesFixed: 0,
   files: {},
   assets: [],
@@ -117,6 +120,7 @@ function handleEvent(prev: ConversionState, event: SseEvent): ConversionState {
         ...prev,
         validationPassed: event.passed,
         validationIssues: event.issues,
+        validationAgent2Skipped: Boolean(event.agent2Skipped),
         issuesFixed: event.issues.filter((i) => i.fixed).length,
       };
     case "files":
@@ -130,6 +134,8 @@ function handleEvent(prev: ConversionState, event: SseEvent): ConversionState {
         stageLabel: "Complete",
         outputUrl: event.outputUrl,
         metadata: event.metadata,
+        validationAgent2Skipped:
+          prev.validationAgent2Skipped || Boolean(event.metadata.agent2ValidationSkipped),
       };
     case "error":
       return {

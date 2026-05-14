@@ -34,7 +34,9 @@ export function ProgressIndicator({ state }: ProgressIndicatorProps) {
 
   const showValidationBadge =
     atOrPastValidation &&
-    (state.validationIssues.length > 0 || state.validationPassed === true);
+    (state.validationIssues.length > 0 ||
+      state.validationPassed === true ||
+      state.validationAgent2Skipped);
 
   const xmlCount =
     state.metadata?.fileCount ?? Object.keys(state.files).length;
@@ -126,10 +128,24 @@ export function ProgressIndicator({ state }: ProgressIndicatorProps) {
 
       {showValidationBadge ? (
         <div className="mt-2 border-t border-black/15 pt-4">
-          {state.validationPassed === true ? (
+          {state.validationAgent2Skipped ? (
+            <p className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">
+              <span className="font-medium">Agent 2 skipped.</span> LLM validation is off on the
+              server (<code className="rounded bg-black/5 px-1 text-xs">GEMINI_AGENT2_ENABLED=false</code>
+              ). The ZIP is Agent&nbsp;1 output only; findings below are from basic checks, not a full
+              model review.
+            </p>
+          ) : null}
+          {state.validationPassed === true && !state.validationAgent2Skipped ? (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
               All checks passed
             </p>
+          ) : state.validationPassed === true && state.validationAgent2Skipped ? (
+            state.validationIssues.length === 0 ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+                Basic checks: no blocking errors
+              </p>
+            ) : null
           ) : state.validationIssues.length > 0 ? (
             <div className="space-y-3">
               <button
