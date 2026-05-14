@@ -44,16 +44,39 @@ function ditaOtStrict(): boolean {
   return v === "true" || v === "1" || v === "yes" || v === "on";
 }
 
-/** Resolve CLI path: `DITA_OT_DIR`/`bin`/dita[.bat] or bare `dita` on PATH. */
-export function resolveDitaCliPath(): string | null {
+/** Resolve CLI executable: OT root `bin` script, or bare `dita` if `DITA_OT_DIR` unset. */
+export function resolveDitaCliPath(): string | "dita" | null {
   const dir = process.env.DITA_OT_DIR?.trim();
   if (dir) {
-    const bin = join(dir, "bin", process.platform === "win32" ? "dita.bat" : "dita");
+    const binName = process.platform === "win32" ? "dita.bat" : "dita";
+    const bin = join(dir, "bin", binName);
     if (existsSync(bin)) {
       return bin;
     }
+    return null;
   }
   return "dita";
+}
+
+function expectedOtBin(dir: string): string {
+  return join(dir, "bin", process.platform === "win32" ? "dita.bat" : "dita");
+}
+
+function enrichSpawnENOENT(message: string, cli: string): string {
+  if (!message.includes("ENOENT") && !(message.includes("spawnSync") && message.includes("not found"))) {
+    return message;
+  }
+  if (cli === "dita") {
+    return (
+      `${message} ` +
+      (process.platform === "win32"
+        ? "Either set DITA_OT_DIR to the folder that contains bin\\dita.bat after unzipping DITA-OT, " +
+          "or add the Open Toolkit bin folder to PATH and restart npm run dev " +
+          "(the Node server often does not see the same PATH as an interactive terminal)."
+        : "Set DITA_OT_DIR to your DITA-OT root so bin/dita exists, or install dita on PATH and restart the dev server.")
+    );
+  }
+  return message;
 }
 
 /**
@@ -157,13 +180,23 @@ export function runDitaOtHtml5(
     return { status: "failed", message: "map.ditamap is required for DITA-OT." };
   }
 
-  const cli = resolveDitaCliPath();
-  if (!cli) {
-    return { status: "failed", message: "Could not resolve DITA-OT CLI." };
+  const cliRaw = resolveDitaCliPath();
+  if (cliRaw === null) {
+    const dir = process.env.DITA_OT_DIR?.trim() ?? "";
+    return {
+      status: "failed",
+      message:
+        dir.length > 0
+          ? `DITA_OT_DIR is set to "${dir}" but this file does not exist: ${expectedOtBin(dir)}. ` +
+            "Unzip DITA-Open-Toolkit so `bin\\\\dita.bat` (Windows) lives under `DITA_OT_DIR`."
+          : "Could not resolve DITA-OT CLI.",
+    };
   }
 
+  const cli = cliRaw === "dita" ? "dita" : cliRaw;
+
   if (cli !== "dita" && !existsSync(cli)) {
-    return { status: "failed", message: `DITA_OT_DIR bin not found: ${cli}` };
+    return { status: "failed", message: `DITA-OT shell not found: ${cli}` };
   }
 
   const workspace = mkdtempSync(join(tmpdir(), "dita-ot-"));
@@ -175,16 +208,20 @@ export function runDitaOtHtml5(
 
     const args = ["-i", "map.ditamap", "-f", "html5", "-o", "html5-out"];
 
+    const useShell =
+      process.platform === "win32" && (cli === "dita" || cli.endsWith(".bat"));
+
     const result = spawnSync(cli, args, {
       cwd: workspace,
       encoding: "utf8",
       maxBuffer: 20 * 1024 * 1024,
       timeout: DITA_TIMEOUT_MS,
-      shell: process.platform === "win32" && cli.endsWith(".bat"),
+      shell: useShell,
     });
 
     if (result.error) {
-      const msg = result.error.message;
+      const raw = result.error.message;
+      const msg = enrichSpawnENOENT(raw, cli);
       return {
         status: "failed",
         message: `DITA-OT spawn failed: ${msg}`,

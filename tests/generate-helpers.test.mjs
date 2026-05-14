@@ -46,6 +46,8 @@ async function loadGenerateHelpers() {
   const generateJs = ts
     .transpileModule(generateSrc, TS_OPTS)
     .outputText
+    .replace('import { generateAiHtmlPreview, isAiHtmlPreviewEnabled } from "@/lib/ai-html-preview";\r\n', "")
+    .replace('import { generateAiHtmlPreview, isAiHtmlPreviewEnabled } from "@/lib/ai-html-preview";\n', "")
     .replace('import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";\r\n', "")
     .replace('import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";\n', "")
     .replace('import { getErrorMessage } from "@/lib/error-message";\r\n', "")
@@ -55,7 +57,16 @@ async function loadGenerateHelpers() {
     .replace('import("fast-xml-parser")', `import("${fastXmlParserUrl}")`)
     .replace('import("jszip")', `import("${jszipUrl}")`);
 
-  const combined = `${ditaHtml5Js}\n${parseDelimitedJs}\n${errorMessageJs}\n${generateJs}`;
+  const aiHtmlPreviewStub = `
+async function generateAiHtmlPreview() {
+  return { ok: false, message: "stub" };
+}
+function isAiHtmlPreviewEnabled() {
+  return false;
+}
+`;
+
+  const combined = `${ditaHtml5Js}\n${aiHtmlPreviewStub}\n${parseDelimitedJs}\n${errorMessageJs}\n${generateJs}`;
 
   const encoded = Buffer.from(combined, "utf8").toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
@@ -118,6 +129,30 @@ test("buildGenerateUserMessage fixes BNY Platform and map.ditamap instructions",
   assert.match(message, /fixed map\.ditamap file/);
 });
 
+test("buildGenerateUserMessage prepends output budget line when maxOutputTokens set", async () => {
+  const { buildGenerateUserMessage } = await loadGenerateHelpers();
+
+  const message = buildGenerateUserMessage(
+    {
+      documentTitle: "Brief",
+      topics: [
+        {
+          type: "concept",
+          title: "Overview",
+          suggestedFilename: "c_overview",
+          confidence: "high",
+          splitReason: null,
+          content: "Short.",
+        },
+      ],
+    },
+    { maxOutputTokens: 12000 },
+  );
+
+  assert.match(message, /Hard output ceiling for this request: about 12000 model output tokens/);
+  assert.match(message, /%%END%% on its own line/);
+});
+
 test("parseValidationResult accepts fenced Agent 2 JSON and preserves repaired files", async () => {
   const { parseValidationResult } = await loadGenerateHelpers();
 
@@ -170,6 +205,21 @@ test("buildValidationUserMessage includes deterministic issues and all file cont
   assert.match(message, /MAP_COMPLETENESS/);
   assert.match(message, /%%FILE:c_intro\.dita%%/);
   assert.match(message, /%%FILE:map\.ditamap%%/);
+});
+
+test("buildValidationUserMessage prepends JSON budget preamble when maxOutputTokens set", async () => {
+  const { buildValidationUserMessage } = await loadGenerateHelpers();
+
+  const message = buildValidationUserMessage(
+    {
+      files: { "c_intro.dita": "<concept/>", "map.ditamap": "<map/>" },
+      deterministicIssues: [],
+    },
+    { maxOutputTokens: 8000 },
+  );
+
+  assert.match(message, /about 8000 model output tokens/);
+  assert.match(message, /Return exactly one JSON object that parses\./);
 });
 
 test("runDeterministicChecks reports map and image validation issues", async () => {

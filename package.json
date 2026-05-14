@@ -11,6 +11,7 @@
     "lint": "eslint",
     "test:classify": "node --test tests/classify-helpers.test.mjs",
     "test:dita-html5": "node --test tests/dita-html5-helpers.test.mjs",
+    "test:ai-html-preview": "node --test tests/ai-html-preview-helpers.test.mjs",
     "test:e2e:prod-smoke": "node tests/e2e-prod-smoke.mjs"
   },
   "dependencies": {

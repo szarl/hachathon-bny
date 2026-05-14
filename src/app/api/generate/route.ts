@@ -10,6 +10,7 @@ import {
 } from "@/lib/classify";
 import {
   buildFormattingRepairMessage,
+  buildGeminiOutputBudgetPreamble,
   buildGenerateUserMessage,
   buildValidationUserMessage,
   collectExtractedAssets,
@@ -26,7 +27,7 @@ import {
   type ValidationResult,
 } from "@/lib/generate";
 import { withGeminiRetries } from "@/lib/gemini-retry";
-import { geminiModels, getGeminiClient, isGeminiAgent2Enabled } from "@/lib/gemini";
+import { geminiModels, getGeminiClient, isGeminiAgent2Enabled, maxAgent1OutputTokens, maxAgent2OutputTokens } from "@/lib/gemini";
 import { getErrorMessage, setJobStatus as updateJobStatus } from "@/lib/jobs";
 import { AGENT_1_SYSTEM_PROMPT, AGENT_2_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -166,11 +167,25 @@ export async function POST(req: NextRequest) {
             getSupabaseAdmin(),
           );
 
-          await setJobStatus(body.jobId, "done", {
+          const donePayload: Record<string, unknown> = {
             output_url: upload.outputUrl,
             topics,
             metadata: upload.metadata,
-          });
+            html_preview_url: upload.metadata.htmlPreviewUrl ?? null,
+          };
+
+          try {
+            await setJobStatus(body.jobId, "done", donePayload);
+          } catch (statusError) {
+            const msg = getErrorMessage(statusError);
+            if (/html_preview_url/i.test(msg) || /column .* does not exist/i.test(msg)) {
+              const withoutCol = { ...donePayload };
+              delete withoutCol.html_preview_url;
+              await setJobStatus(body.jobId, "done", withoutCol);
+            } else {
+              throw statusError;
+            }
+          }
 
           send({ type: "files", files: pickXmlTextFilesForSse(validation.files) });
           send({ type: "assets", assets: upload.assets });
@@ -239,7 +254,11 @@ async function runAgent1({
   onToken: (text: string) => void;
 }): Promise<Record<string, string>> {
   const ai = getGeminiClient();
-  const userMessage = buildGenerateUserMessage({ documentTitle, topics });
+  const maxOut = maxAgent1OutputTokens();
+  const userMessage = buildGenerateUserMessage(
+    { documentTitle, topics },
+    { maxOutputTokens: maxOut },
+  );
   const stream = await withGeminiRetries(() =>
     ai.models.generateContentStream({
       model: geminiModels.generate,
@@ -247,6 +266,7 @@ async function runAgent1({
       config: {
         systemInstruction: AGENT_1_SYSTEM_PROMPT,
         temperature: 0.1,
+        maxOutputTokens: maxOut,
       },
     }),
   );
@@ -276,14 +296,18 @@ async function runAgent2(
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const ai = getGeminiClient();
+  const maxOut = maxAgent2OutputTokens();
   const response = await withGeminiRetries(() =>
     ai.models.generateContent({
       model: geminiModels.validate,
-      contents: buildValidationUserMessage({ files, deterministicIssues }),
+      contents: buildValidationUserMessage(
+        { files, deterministicIssues },
+        { maxOutputTokens: maxOut },
+      ),
       config: {
         systemInstruction: AGENT_2_SYSTEM_PROMPT,
         responseMimeType: "application/json",
-        maxOutputTokens: 8192,
+        maxOutputTokens: maxOut,
         temperature: 0,
       },
     }),
@@ -294,13 +318,17 @@ async function runAgent2(
 
 async function repairDelimitedOutput(rawOutput: string): Promise<Record<string, string>> {
   const ai = getGeminiClient();
+  const maxOut = maxAgent1OutputTokens();
   const response = await withGeminiRetries(() =>
     ai.models.generateContent({
       model: geminiModels.generate,
-      contents: buildFormattingRepairMessage(rawOutput),
+      contents:
+        buildGeminiOutputBudgetPreamble(maxOut, "agent1-xml") +
+        buildFormattingRepairMessage(rawOutput),
       config: {
         systemInstruction: AGENT_1_SYSTEM_PROMPT,
         temperature: 0,
+        maxOutputTokens: maxOut,
       },
     }),
   );

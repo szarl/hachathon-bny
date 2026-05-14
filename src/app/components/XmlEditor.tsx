@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { ConversionState } from "@/app/hooks/useConversionStream";
 import { parseDelimitedDitaOutput } from "@/lib/parse-delimited-dita-output";
@@ -81,6 +81,16 @@ export function XmlEditor({ state }: XmlEditorProps) {
   );
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  /** In-browser edits after `done`; not persisted to Supabase or the ZIP. */
+  const [editedContent, setEditedContent] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (state.stage !== "done") {
+      queueMicrotask(() => {
+        setEditedContent({});
+      });
+    }
+  }, [state.stage]);
 
   const displaySelected =
     sortedKeys.length > 0
@@ -89,9 +99,11 @@ export function XmlEditor({ state }: XmlEditorProps) {
         : defaultTab
       : null;
 
+  const canEdit = state.stage === "done" && hasFileTabs;
+
   const value =
     hasFileTabs && displaySelected != null
-      ? (displayFiles[displaySelected] ?? "")
+      ? (editedContent[displaySelected] ?? displayFiles[displaySelected] ?? "")
       : state.xmlBuffer;
 
   const statusLabel = hasValidated
@@ -106,9 +118,16 @@ export function XmlEditor({ state }: XmlEditorProps) {
         <h2 className="text-sm font-semibold text-black">
           XML Preview
         </h2>
-        {statusLabel ? (
-          <span className="text-xs text-black/60">{statusLabel}</span>
-        ) : null}
+        <div className="flex flex-col items-end gap-0.5 text-right">
+          {statusLabel ? (
+            <span className="text-xs text-black/60">{statusLabel}</span>
+          ) : null}
+          {canEdit ? (
+            <span className="max-w-[18rem] text-[11px] leading-snug text-black/50">
+              Edits stay in this session only; download the ZIP for the server output.
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {hasFileTabs ? (
@@ -145,8 +164,18 @@ export function XmlEditor({ state }: XmlEditorProps) {
           language="xml"
           theme="vs-dark"
           value={value}
+          onChange={
+            canEdit && displaySelected
+              ? (v) => {
+                  setEditedContent((prev) => ({
+                    ...prev,
+                    [displaySelected]: v ?? "",
+                  }));
+                }
+              : undefined
+          }
           options={{
-            readOnly: true,
+            readOnly: !canEdit,
             minimap: { enabled: false },
             fontSize: 13,
           }}

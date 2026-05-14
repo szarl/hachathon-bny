@@ -1,4 +1,5 @@
 import type { ClassifiedTopic, ExtractedPage } from "./classify";
+import { generateAiHtmlPreview, isAiHtmlPreviewEnabled } from "@/lib/ai-html-preview";
 import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";
 import { getErrorMessage } from "@/lib/error-message";
 import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";
@@ -46,6 +47,8 @@ export type JobMetadata = {
   htmlPreviewUrl?: string;
   htmlEntryRelativePath?: string;
   htmlGenerationMessage?: string;
+  /** Hosted preview pipeline: toolkit upload vs Gemini single-page HTML (no images in MVP AI path). */
+  htmlPreviewSource?: "dita-ot" | "ai";
 };
 
 export type StorageUploadResult = {
@@ -73,7 +76,36 @@ export type GenerateRequest = {
   topics: ClassifiedTopic[];
 };
 
-export function buildGenerateUserMessage(req: GenerateRequest): string {
+export type BuildGenerateUserOptions = {
+  /** When set, prepends API output ceiling guidance (must match route maxOutputTokens). */
+  maxOutputTokens?: number;
+};
+
+export function buildGeminiOutputBudgetPreamble(
+  maxOutputTokens: number,
+  mode: "agent1-xml" | "agent2-json",
+): string {
+  const head =
+    `Hard output ceiling for this request: about ${maxOutputTokens} model output tokens. ` +
+    `Treat roughly the last quarter as RESERVED so you NEVER hit truncation mid-output.\n\n`;
+
+  if (mode === "agent1-xml") {
+    return (
+      `${head}- Emit valid delimited XML: each file starts with %%FILE:filename.ext%%.\n` +
+      `- ALWAYS end the entire reply with %%END%% on its own line. map.ditamap MUST be last.\n` +
+      `- If the topic set is large, tighten early: shorter body copy, tighter tables/lists, merge minor sections—never truncate mid-attribute, mid-tag, or mid-file boundary.\n` +
+      `- If you cannot fit everything, drop entire trailing topic bodies or lesser topics cleanly (close tags, keep delimiters legal) rather than starving the closing segment.\n\n`
+    );
+  }
+
+  return (
+    `${head}- Return exactly one JSON object that parses.\n` +
+    `- Prefer concise issue messages; prioritize closing all strings and braces correctly over extra commentary.\n` +
+    `- Never truncate mid-XML inside "files": use minimal-diff repairs inside token budget.\n\n`
+  );
+}
+
+export function buildGenerateUserMessage(req: GenerateRequest, options?: BuildGenerateUserOptions): string {
   const documentTitle = req.documentTitle?.trim() || "Untitled document";
   const topicList = req.topics
     .map(
@@ -89,7 +121,13 @@ export function buildGenerateUserMessage(req: GenerateRequest): string {
     )
     .join("\n\n");
 
+  const budget =
+    typeof options?.maxOutputTokens === "number"
+      ? buildGeminiOutputBudgetPreamble(options.maxOutputTokens, "agent1-xml")
+      : "";
+
   return (
+    budget +
     "Generate DITA XML files for the following document.\n\n" +
     `Document title: ${documentTitle}\n` +
     "Product name for keydef: BNY Platform\n" +
@@ -130,13 +168,20 @@ export function buildFormattingRepairMessage(rawOutput: string): string {
   );
 }
 
-export function buildValidationUserMessage({
-  files,
-  deterministicIssues,
-}: {
-  files: Record<string, string>;
-  deterministicIssues: ValidationIssue[];
-}): string {
+export type BuildValidationUserOptions = {
+  maxOutputTokens?: number;
+};
+
+export function buildValidationUserMessage(
+  {
+    files,
+    deterministicIssues,
+  }: {
+    files: Record<string, string>;
+    deterministicIssues: ValidationIssue[];
+  },
+  options?: BuildValidationUserOptions,
+): string {
   const issueContext =
     deterministicIssues.length > 0
       ? JSON.stringify(deterministicIssues, null, 2)
@@ -145,7 +190,13 @@ export function buildValidationUserMessage({
     .map(([filename, content]) => `%%FILE:${filename}%%\n${content}`)
     .join("\n\n");
 
+  const budget =
+    typeof options?.maxOutputTokens === "number"
+      ? buildGeminiOutputBudgetPreamble(options.maxOutputTokens, "agent2-json")
+      : "";
+
   return (
+    budget +
     "Validate and repair this complete DITA file set.\n\n" +
     "Deterministic issues to repair before returning final files:\n" +
     `${issueContext}\n\n` +
@@ -281,9 +332,6 @@ export async function uploadFilesToStorage(
   const htmlResult = runDitaOtHtml5(files, assets);
 
   if (htmlResult.status === "ok") {
-    for (const [rel, body] of htmlResult.files.entries()) {
-      zip.file(`html/${rel}`, body);
-    }
     const previewPrefix = `${jobId}/${stamp}-html-preview`;
     await uploadHtmlPreviewArtifacts(supabase, previewPrefix, htmlResult.files);
 
@@ -295,6 +343,7 @@ export async function uploadFilesToStorage(
       htmlFileCount: htmlResult.files.size,
       htmlEntryRelativePath: htmlResult.entryRelativePath,
       htmlPreviewUrl: previewUrl,
+      htmlPreviewSource: "dita-ot",
     };
   } else if (htmlResult.status === "failed") {
     if (ditaOtStrict()) {
@@ -312,6 +361,32 @@ export async function uploadFilesToStorage(
       htmlGenerationStatus: "skipped",
       htmlGenerationMessage: htmlResult.message,
     };
+  }
+
+  if (!htmlExtras.htmlPreviewUrl && isAiHtmlPreviewEnabled()) {
+    const ai = await generateAiHtmlPreview(files);
+    if (ai.ok) {
+      const previewPrefix = `${jobId}/${stamp}-html-preview`;
+      const single = new Map<string, Buffer>([["index.html", Buffer.from(ai.html, "utf8")]]);
+      await uploadHtmlPreviewArtifacts(supabase, previewPrefix, single);
+      const entryKey = `${previewPrefix}/index.html`;
+      const previewUrl = supabase.storage.from("outputs").getPublicUrl(entryKey).data.publicUrl;
+      htmlExtras = {
+        htmlGenerationStatus: "ok",
+        htmlFileCount: 1,
+        htmlEntryRelativePath: "index.html",
+        htmlPreviewUrl: previewUrl,
+        htmlPreviewSource: "ai",
+      };
+    } else {
+      const prior = htmlExtras.htmlGenerationMessage;
+      htmlExtras = {
+        ...htmlExtras,
+        htmlGenerationMessage: prior
+          ? `${prior} · AI preview unavailable: ${ai.message}`
+          : ai.message,
+      };
+    }
   }
 
   const buffer = await zip.generateAsync({ type: "nodebuffer" });

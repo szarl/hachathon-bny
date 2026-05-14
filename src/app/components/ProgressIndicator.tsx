@@ -148,18 +148,26 @@ export function ProgressIndicator({ state }: ProgressIndicatorProps) {
             ) : null
           ) : state.validationIssues.length > 0 ? (
             <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setIssuesExpanded((v) => !v)}
-                className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left text-sm font-medium text-amber-950 transition hover:bg-amber-100"
-              >
-                {state.issuesFixed > 0
-                  ? `Fixed ${state.issuesFixed} issue${state.issuesFixed === 1 ? "" : "s"}`
-                  : `${state.validationIssues.length} issue${state.validationIssues.length === 1 ? "" : "s"} reported`}
-                <span className="ml-2 text-xs font-normal opacity-80">
-                  {issuesExpanded ? "Hide details" : "Show details"}
-                </span>
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIssuesExpanded((v) => !v)}
+                  className="w-full flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left text-sm font-medium text-amber-950 transition hover:bg-amber-100 sm:min-w-0"
+                >
+                  {state.issuesFixed > 0
+                    ? `Fixed ${state.issuesFixed} issue${state.issuesFixed === 1 ? "" : "s"}`
+                    : `${state.validationIssues.length} issue${state.validationIssues.length === 1 ? "" : "s"} reported`}
+                  <span className="ml-2 text-xs font-normal opacity-80">
+                    {issuesExpanded ? "Hide details" : "Show details"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg bg-bny-teal px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-95 sm:self-start"
+                >
+                  Fix issues
+                </button>
+              </div>
               {issuesExpanded ? (
                 <div className="min-w-0 overflow-x-auto rounded-lg border border-black/15 bg-black/[0.03]">
                   <div className="divide-y divide-black/10">

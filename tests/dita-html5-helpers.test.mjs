@@ -75,13 +75,27 @@ test("resolveDitaCliPath reads DITA_OT_DIR bin with dita.bat on win32", async ()
   }
 });
 
-test("resolveDitaCliPath falls back to dita on PATH when dir missing", async () => {
+test("resolveDitaCliPath uses bare dita when DITA_OT_DIR is unset", async () => {
+  const { resolveDitaCliPath } = await loadDitaHtml5Helpers();
+
+  const prev = process.env.DITA_OT_DIR;
+  delete process.env.DITA_OT_DIR;
+  try {
+    assert.equal(resolveDitaCliPath(), "dita");
+  } finally {
+    if (prev !== undefined) {
+      process.env.DITA_OT_DIR = prev;
+    }
+  }
+});
+
+test("resolveDitaCliPath returns null when DITA_OT_DIR is set but bin is missing", async () => {
   const { resolveDitaCliPath } = await loadDitaHtml5Helpers();
 
   const prev = process.env.DITA_OT_DIR;
   process.env.DITA_OT_DIR = join(tmpdir(), "nonexistent-dita-ot-xyz");
   try {
-    assert.equal(resolveDitaCliPath(), "dita");
+    assert.equal(resolveDitaCliPath(), null);
   } finally {
     process.env.DITA_OT_DIR = prev;
   }

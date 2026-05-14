@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { HtmlPreviewModal } from "@/app/components/HtmlPreviewModal";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
 /** Latest N jobs; matches architecture note (10 or 20). */
@@ -16,6 +17,8 @@ export type JobHistoryRow = {
   filename: string;
   status: string;
   output_url: string | null;
+  /** Denormalized for reliable history previews (migration 002); optional until migration applied. */
+  html_preview_url?: string | null;
   metadata: {
     htmlPreviewUrl?: string;
   } | null;
@@ -53,9 +56,31 @@ function openDownload(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+function getHtmlPreviewUrl(job: JobHistoryRow): string | null {
+  const direct = job.html_preview_url;
+  if (typeof direct === "string" && direct.trim().length > 0) {
+    return direct.trim();
+  }
+
+  let m = job.metadata;
+  if (typeof m === "string") {
+    try {
+      m = JSON.parse(m) as JobHistoryRow["metadata"];
+    } catch {
+      return null;
+    }
+  }
+  if (!m || typeof m !== "object") {
+    return null;
+  }
+  const raw = "htmlPreviewUrl" in m ? (m as { htmlPreviewUrl?: unknown }).htmlPreviewUrl : undefined;
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
+
 export function JobHistory() {
   const [jobs, setJobs] = useState<JobHistoryRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
 
   const supabase = getSupabaseBrowser();
 
@@ -64,11 +89,7 @@ export function JobHistory() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("jobs")
-      .select("id,created_at,filename,status,output_url,metadata")
-      .order("created_at", { ascending: false })
-      .limit(JOB_HISTORY_LIMIT);
+    const { data, error } = await supabase.from("jobs").select("*").order("created_at", { ascending: false }).limit(JOB_HISTORY_LIMIT);
 
     if (error) {
       setLoadError(error.message);
@@ -100,14 +121,8 @@ export function JobHistory() {
             return;
           }
 
-          const row = payload.new as JobHistoryRow | null;
-          if (!row?.id) {
-            return;
-          }
-
-          setJobs((prev) => {
-            const others = prev.filter((j) => j.id !== row.id);
-            return sliceLimit([row, ...others]);
+          queueMicrotask(() => {
+            void fetchJobs();
           });
         },
       )
@@ -151,72 +166,93 @@ export function JobHistory() {
       ) : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[600px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-black/15">
               <th className="pb-2 pr-3 font-medium text-black/70">Filename</th>
               <th className="pb-2 pr-3 font-medium text-black/70">Created</th>
               <th className="pb-2 pr-3 font-medium text-black/70">Status</th>
-              <th className="pb-2 font-medium text-black/70">Actions</th>
+              <th className="pb-2 pr-3 font-medium text-black/70">Preview</th>
+              <th className="pb-2 font-medium text-black/70">Download</th>
             </tr>
           </thead>
           <tbody>
             {jobs.length === 0 ? (
               <tr>
-                <td colSpan={4} className="py-6 text-center text-black/60">
+                <td colSpan={5} className="py-6 text-center text-black/60">
                   No jobs yet.
                 </td>
               </tr>
             ) : (
-              jobs.map((job) => (
-                <tr
-                  key={job.id}
-                  className="border-b border-black/10 last:border-0"
-                >
-                  <td className="max-w-[200px] truncate py-2.5 pr-3 font-medium text-black">
-                    {job.filename}
-                  </td>
-                  <td className="whitespace-nowrap py-2.5 pr-3 text-black/70">
-                    {DATE_FMT.format(new Date(job.created_at))}
-                  </td>
-                  <td className="py-2.5 pr-3">
-                    <span
-                      className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${badgeClasses(job.status)}`}
-                    >
-                      {job.status}
-                    </span>
-                  </td>
-                  <td className="py-2.5">
-                    {job.status === "done" && job.output_url ? (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              jobs.map((job) => {
+                const previewUrl = getHtmlPreviewUrl(job);
+                return (
+                  <tr
+                    key={job.id}
+                    className="border-b border-black/10 last:border-0"
+                  >
+                    <td className="max-w-[200px] truncate py-2.5 pr-3 font-medium text-black">
+                      {job.filename}
+                    </td>
+                    <td className="whitespace-nowrap py-2.5 pr-3 text-black/70">
+                      {DATE_FMT.format(new Date(job.created_at))}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span
+                        className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${badgeClasses(job.status)}`}
+                      >
+                        {job.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      {job.status === "done" ? (
+                        previewUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModalUrl(previewUrl)}
+                            className="text-sm font-semibold text-bny-teal underline-offset-2 hover:underline"
+                            aria-label="Open HTML preview"
+                          >
+                            Preview HTML
+                          </button>
+                        ) : (
+                          <span
+                            className="text-black/40"
+                            title="No HTML preview stored for this job (older run or preview was unavailable)."
+                          >
+                            —
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-black/40">—</span>
+                      )}
+                    </td>
+                    <td className="py-2.5">
+                      {job.status === "done" && job.output_url ? (
                         <button
                           type="button"
                           onClick={() => openDownload(job.output_url!)}
                           className="text-sm font-semibold text-bny-teal underline-offset-2 hover:underline"
                         >
-                          Download
+                          Download ZIP
                         </button>
-                        {job.metadata?.htmlPreviewUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => openDownload(job.metadata!.htmlPreviewUrl!)}
-                            className="text-sm font-semibold text-bny-teal underline-offset-2 hover:underline"
-                            aria-label="Preview HTML output in a new tab"
-                          >
-                            Preview HTML
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-black/40">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                      ) : (
+                        <span className="text-black/40">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
+
+      <HtmlPreviewModal
+        open={previewModalUrl != null}
+        url={previewModalUrl}
+        onClose={() => setPreviewModalUrl(null)}
+      />
     </section>
   );
 }

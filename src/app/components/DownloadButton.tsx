@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+import { HtmlPreviewModal } from "@/app/components/HtmlPreviewModal";
 import type { ConversionState } from "@/app/hooks/useConversionStream";
 
 type DownloadButtonProps = {
@@ -7,6 +10,16 @@ type DownloadButtonProps = {
 };
 
 export function DownloadButton({ state }: DownloadButtonProps) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (state.stage !== "done" || !state.outputUrl) {
+      queueMicrotask(() => {
+        setPreviewOpen(false);
+      });
+    }
+  }, [state.stage, state.outputUrl]);
+
   if (state.stage !== "done" || !state.outputUrl) {
     return null;
   }
@@ -15,17 +28,23 @@ export function DownloadButton({ state }: DownloadButtonProps) {
   const imageCount = state.metadata?.usedAssetCount ?? 0;
 
   const previewUrl = state.metadata?.htmlPreviewUrl;
+  const htmlStatus = state.metadata?.htmlGenerationStatus;
+  const htmlMessage = state.metadata?.htmlGenerationMessage;
 
   const handleDownload = () => {
     window.open(state.outputUrl!, "_blank", "noopener,noreferrer");
   };
 
+  const previewSource = state.metadata?.htmlPreviewSource;
+
   const handlePreviewHtml = () => {
     if (!previewUrl) {
       return;
     }
-    window.open(previewUrl, "_blank", "noopener,noreferrer");
+    setPreviewOpen(true);
   };
+
+  const closePreview = () => setPreviewOpen(false);
 
   return (
     <section
@@ -37,8 +56,24 @@ export function DownloadButton({ state }: DownloadButtonProps) {
           <p className="text-sm text-black/70">
             {xmlCount} XML file{xmlCount === 1 ? "" : "s"} · {imageCount} image
             {imageCount === 1 ? "" : "s"} · ZIP ready
-            {previewUrl ? " · HTML preview available" : null}
+            {previewUrl
+              ? previewSource === "ai"
+                ? " · AI HTML preview available (figures omitted)"
+                : " · HTML preview available"
+              : null}
           </p>
+          {!previewUrl && htmlStatus && htmlStatus !== "ok" && htmlMessage ? (
+            <p
+              className="mt-2 max-w-xl text-xs leading-snug text-amber-900/90"
+              role="status"
+            >
+              <span className="font-semibold">
+                HTML preview unavailable
+                {htmlStatus === "failed" ? " (DITA-OT failed)" : " (skipped)"}:
+              </span>{" "}
+              <span className="text-black/75">{htmlMessage}</span>
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {previewUrl ? (
@@ -46,7 +81,7 @@ export function DownloadButton({ state }: DownloadButtonProps) {
               type="button"
               onClick={handlePreviewHtml}
               className="rounded-lg border border-bny-teal/40 bg-white px-4 py-2.5 text-sm font-semibold text-bny-teal shadow-sm transition hover:bg-bny-teal/10"
-              aria-label="Open DITA HTML5 preview in a new tab"
+              aria-label="Open HTML preview in a modal"
             >
               Preview HTML
             </button>
@@ -60,6 +95,12 @@ export function DownloadButton({ state }: DownloadButtonProps) {
           </button>
         </div>
       </div>
+
+      <HtmlPreviewModal
+        open={previewOpen}
+        url={previewUrl ?? null}
+        onClose={closePreview}
+      />
     </section>
   );
 }
