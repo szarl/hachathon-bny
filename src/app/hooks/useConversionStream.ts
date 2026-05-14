@@ -7,6 +7,7 @@ import type { AssetSummary, JobMetadata, ValidationIssue } from "@/lib/generate"
 
 export type Stage =
   | "idle"
+  | "connecting"
   | "extracting"
   | "ocr"
   | "classifying"
@@ -130,7 +131,11 @@ export function useConversionStream() {
 
   const startConversion = useCallback(
     async ({ jobId, documentTitle }: { jobId: string; documentTitle?: string }) => {
-      setState(INITIAL_STATE);
+      setState({
+        ...INITIAL_STATE,
+        stage: "connecting",
+        stageLabel: "Starting conversion…",
+      });
 
       try {
         const res = await fetch("/api/generate", {
