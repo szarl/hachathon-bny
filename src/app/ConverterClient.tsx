@@ -2,6 +2,7 @@
 
 import { ProgressIndicator } from "@/app/components/ProgressIndicator";
 import { UploadZone } from "@/app/components/UploadZone";
+import { XmlEditor } from "@/app/components/XmlEditor";
 import { useConversionStream } from "@/app/hooks/useConversionStream";
 
 export function ConverterClient() {
@@ -11,6 +12,7 @@ export function ConverterClient() {
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6 p-8">
       <UploadZone conversionState={state} startConversion={startConversion} />
       <ProgressIndicator state={state} />
+      <XmlEditor state={state} />
     </div>
   );
 }
