@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import ts from "typescript";
 
 async function loadGenerateHelpers() {
+  const require = createRequire(import.meta.url);
+  const fastXmlParserUrl = pathToFileURL(require.resolve("fast-xml-parser")).href;
+  const jszipUrl = pathToFileURL(require.resolve("jszip")).href;
   const sourcePath = new URL("../src/lib/generate.ts", import.meta.url);
   const source = await readFile(sourcePath, "utf8");
   const transpiled = ts.transpileModule(source, {
@@ -12,7 +17,9 @@ async function loadGenerateHelpers() {
       target: ts.ScriptTarget.ES2022,
       verbatimModuleSyntax: true,
     },
-  }).outputText;
+  }).outputText
+    .replace('import("fast-xml-parser")', `import("${fastXmlParserUrl}")`)
+    .replace('import("jszip")', `import("${jszipUrl}")`);
 
   const encoded = Buffer.from(transpiled, "utf8").toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
@@ -73,4 +80,161 @@ test("buildGenerateUserMessage fixes BNY Platform and map.ditamap instructions",
   assert.match(message, /Product name for keydef: BNY Platform/);
   assert.match(message, /Suggested filename: c_manage_2a7_processing\.dita/);
   assert.match(message, /fixed map\.ditamap file/);
+});
+
+test("parseValidationResult accepts fenced Agent 2 JSON and preserves repaired files", async () => {
+  const { parseValidationResult } = await loadGenerateHelpers();
+
+  const result = parseValidationResult(`\`\`\`json
+{
+  "passed": true,
+  "issueCount": 1,
+  "issues": [
+    {
+      "rule": "XML_WELL_FORMED",
+      "severity": "warning",
+      "file": "c_intro.dita",
+      "message": "Fixed entity escaping.",
+      "fixed": true
+    }
+  ],
+  "files": {
+    "c_intro.dita": "<concept id=\\"concept-1111\\"/>",
+    "map.ditamap": "<map><topicref href=\\"c_intro.dita\\"/></map>"
+  }
+}
+\`\`\``);
+
+  assert.equal(result.passed, true);
+  assert.equal(result.issueCount, 1);
+  assert.equal(result.issues[0].rule, "XML_WELL_FORMED");
+  assert.equal(result.files["c_intro.dita"], '<concept id="concept-1111"/>');
+});
+
+test("buildValidationUserMessage includes deterministic issues and all file contents", async () => {
+  const { buildValidationUserMessage } = await loadGenerateHelpers();
+
+  const message = buildValidationUserMessage({
+    files: {
+      "c_intro.dita": "<concept/>",
+      "map.ditamap": "<map/>",
+    },
+    deterministicIssues: [
+      {
+        rule: "MAP_COMPLETENESS",
+        severity: "error",
+        file: "map.ditamap",
+        message: "Missing topicref for c_intro.dita.",
+        fixed: false,
+      },
+    ],
+  });
+
+  assert.match(message, /Deterministic issues to repair/);
+  assert.match(message, /MAP_COMPLETENESS/);
+  assert.match(message, /%%FILE:c_intro\.dita%%/);
+  assert.match(message, /%%FILE:map\.ditamap%%/);
+});
+
+test("runDeterministicChecks reports map and image validation issues", async () => {
+  const { runDeterministicChecks } = await loadGenerateHelpers();
+
+  const issues = await runDeterministicChecks({
+    "c_intro.dita":
+      '<concept id="concept-1111"><title>Intro</title><conbody><fig><image href="images/missing.png"/></fig></conbody></concept>',
+    "map.ditamap": '<map><topicref href="missing.dita"/></map>',
+  });
+
+  assert.ok(issues.some((issue) => issue.rule === "TOPICREF_TARGETS"));
+  assert.ok(issues.some((issue) => issue.rule === "MAP_COMPLETENESS"));
+  assert.ok(issues.some((issue) => issue.rule === "IMAGE_ALT_TEXT"));
+});
+
+test("runDeterministicChecks accepts non-self-closing images with alt text", async () => {
+  const { runDeterministicChecks } = await loadGenerateHelpers();
+
+  const issues = await runDeterministicChecks(
+    {
+      "c_intro.dita":
+        '<concept id="concept-1111"><title>Intro</title><conbody><fig><image href="images/chart.png"><alt>Chart of balances.</alt></image></fig></conbody></concept>',
+      "map.ditamap": '<map><topicref href="c_intro.dita"/></map>',
+    },
+    ["images/chart.png"],
+  );
+
+  assert.equal(issues.some((issue) => issue.rule === "IMAGE_ALT_TEXT"), false);
+  assert.equal(issues.some((issue) => issue.rule === "IMAGE_REFERENCES"), false);
+});
+
+test("uploadFilesToStorage zips XML and only referenced image assets, then returns metadata", async () => {
+  const require = createRequire(import.meta.url);
+  const JSZip = require("jszip");
+  const { uploadFilesToStorage } = await loadGenerateHelpers();
+  const uploads = [];
+  const calls = [];
+  const supabase = {
+    storage: {
+      from(bucket) {
+        return {
+          async upload(path, body, options) {
+            uploads.push({ bucket, path, body, options });
+            return { error: null };
+          },
+          getPublicUrl(path) {
+            calls.push(["getPublicUrl", bucket, path]);
+            return {
+              data: { publicUrl: `https://example.supabase.co/storage/v1/object/public/${bucket}/${path}` },
+            };
+          },
+        };
+      },
+    },
+  };
+
+  const result = await uploadFilesToStorage(
+    "job-123",
+    {
+      "c_intro.dita":
+        '<concept><fig><image href="images/page_03_image_01.png"><alt>Chart</alt></image></fig></concept>',
+      "map.ditamap": '<map><topicref href="c_intro.dita"/></map>',
+    },
+    [
+      {
+        filename: "page_03_image_01.png",
+        pageNumber: 3,
+        mimeType: "image/png",
+        dataBase64: Buffer.from("used image").toString("base64"),
+      },
+      {
+        filename: "page_03_image_02.png",
+        pageNumber: 3,
+        mimeType: "image/png",
+        dataBase64: Buffer.from("unused image").toString("base64"),
+      },
+    ],
+    { passed: true, issueCount: 0 },
+    new Date("2026-05-14T10:20:30.000Z"),
+    supabase,
+  );
+
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].bucket, "outputs");
+  assert.equal(uploads[0].path, "job-123/20260514T102030000Z-dita_output.zip");
+  assert.equal(uploads[0].options.contentType, "application/zip");
+  assert.equal(uploads[0].options.upsert, true);
+  assert.equal(result.outputUrl, "https://example.supabase.co/storage/v1/object/public/outputs/job-123/20260514T102030000Z-dita_output.zip");
+  assert.deepEqual(result.metadata, {
+    topicCount: 1,
+    fileCount: 2,
+    usedAssetCount: 1,
+    skippedAssetCount: 1,
+    validationPassed: true,
+    validationIssueCount: 0,
+  });
+
+  const zip = await JSZip.loadAsync(uploads[0].body);
+  assert.ok(zip.file("c_intro.dita"));
+  assert.ok(zip.file("map.ditamap"));
+  assert.ok(zip.file("images/page_03_image_01.png"));
+  assert.equal(zip.file("images/page_03_image_02.png"), null);
 });

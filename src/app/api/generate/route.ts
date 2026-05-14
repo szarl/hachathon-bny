@@ -8,10 +8,24 @@ import {
   type ClassifiedTopic,
   type ExtractedPage,
 } from "@/lib/classify";
-import { buildFormattingRepairMessage, buildGenerateUserMessage, parseFiles } from "@/lib/generate";
+import {
+  buildFormattingRepairMessage,
+  buildGenerateUserMessage,
+  buildValidationUserMessage,
+  collectExtractedAssets,
+  parseFiles,
+  parseValidationResult,
+  runDeterministicChecks,
+  uploadFilesToStorage,
+  type AssetSummary,
+  type ExtractedAsset,
+  type JobMetadata,
+  type ValidationIssue,
+  type ValidationResult,
+} from "@/lib/generate";
 import { geminiModels, getGeminiClient } from "@/lib/gemini";
 import { getErrorMessage, setJobStatus as updateJobStatus } from "@/lib/jobs";
-import { AGENT_1_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
+import { AGENT_1_SYSTEM_PROMPT, AGENT_2_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -23,12 +37,20 @@ type GenerateRequestBody = {
   topics?: unknown[];
 };
 
+type ResolvedGenerationInput = {
+  topics: ClassifiedTopic[];
+  assets: ExtractedAsset[];
+};
+
 type SseEvent =
   | { type: "stage"; stage: string; label: string }
   | { type: "topics"; topics: ClassifiedTopic[] }
   | { type: "token"; text: string }
   | { type: "agent1_done"; fileCount: number }
+  | { type: "validation"; passed: boolean; issueCount: number; issues: ValidationIssue[] }
   | { type: "files"; files: Record<string, string> }
+  | { type: "assets"; assets: AssetSummary[] }
+  | { type: "done"; outputUrl: string; metadata: JobMetadata }
   | { type: "error"; error: string };
 
 export async function POST(req: NextRequest) {
@@ -55,7 +77,7 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        const topics = await resolveTopics(body, send);
+        const { topics, assets } = await resolveTopics(body, send);
 
         if (topics.length === 0) {
           throw new Error("No classified topics are available for DITA generation.");
@@ -71,14 +93,64 @@ export async function POST(req: NextRequest) {
           label: "Agent 1 — generating DITA",
         });
 
-        const files = await runAgent1({
+        const agent1Files = await runAgent1({
           documentTitle: body.documentTitle,
           topics,
           onToken: (text) => send({ type: "token", text }),
         });
 
-        send({ type: "agent1_done", fileCount: Object.keys(files).length });
-        send({ type: "files", files });
+        send({ type: "agent1_done", fileCount: Object.keys(agent1Files).length });
+
+        if (body.jobId) {
+          await setJobStatus(body.jobId, "validating");
+        }
+
+        send({
+          type: "stage",
+          stage: "validating",
+          label: "Agent 2 — validating XML",
+        });
+
+        const deterministicIssues = await runDeterministicChecks(
+          agent1Files,
+          assets
+            .filter((asset) => asset.dataBase64 && !asset.skipped)
+            .map((asset) => `images/${asset.filename.split(/[\\/]/).pop() ?? asset.filename}`),
+        );
+        const validation = await runAgent2(agent1Files, deterministicIssues);
+
+        send({
+          type: "validation",
+          passed: validation.passed,
+          issueCount: validation.issueCount,
+          issues: validation.issues,
+        });
+
+        if (body.jobId) {
+          await setJobStatus(body.jobId, "saving");
+          send({ type: "stage", stage: "saving", label: "Saving ZIP" });
+
+          const upload = await uploadFilesToStorage(
+            body.jobId,
+            validation.files,
+            assets,
+            validation,
+            new Date(),
+            getSupabaseAdmin(),
+          );
+
+          await setJobStatus(body.jobId, "done", {
+            output_url: upload.outputUrl,
+            topics,
+            metadata: upload.metadata,
+          });
+
+          send({ type: "files", files: validation.files });
+          send({ type: "assets", assets: upload.assets });
+          send({ type: "done", outputUrl: upload.outputUrl, metadata: upload.metadata });
+        } else {
+          send({ type: "files", files: validation.files });
+        }
       } catch (error) {
         const message = getErrorMessage(error);
 
@@ -105,9 +177,9 @@ export async function POST(req: NextRequest) {
 async function resolveTopics(
   body: GenerateRequestBody,
   send: (event: SseEvent) => void,
-): Promise<ClassifiedTopic[]> {
+): Promise<ResolvedGenerationInput> {
   if (Array.isArray(body.topics)) {
-    return normalizeClassifiedTopics(body.topics);
+    return { topics: normalizeClassifiedTopics(body.topics), assets: [] };
   }
 
   if (!body.jobId) {
@@ -119,6 +191,7 @@ async function resolveTopics(
 
   const pdfUrl = await getJobPdfUrl(body.jobId);
   const extractedPages = await extractPdf(pdfUrl);
+  const assets = collectExtractedAssets(extractedPages);
 
   send({ type: "stage", stage: "classifying", label: "Classifying topics" });
   await setJobStatus(body.jobId, "classifying");
@@ -126,7 +199,7 @@ async function resolveTopics(
   const topics = await classifyExtractedPages(extractedPages);
   send({ type: "topics", topics });
 
-  return topics;
+  return { topics, assets };
 }
 
 async function runAgent1({
@@ -165,6 +238,27 @@ async function runAgent1({
   } catch {
     return repairDelimitedOutput(fullText);
   }
+}
+
+async function runAgent2(
+  files: Record<string, string>,
+  deterministicIssues: ValidationIssue[],
+): Promise<ValidationResult> {
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  const ai = getGeminiClient();
+  const response = await ai.models.generateContent({
+    model: geminiModels.validate,
+    contents: buildValidationUserMessage({ files, deterministicIssues }),
+    config: {
+      systemInstruction: AGENT_2_SYSTEM_PROMPT,
+      responseMimeType: "application/json",
+      maxOutputTokens: 8192,
+      temperature: 0,
+    },
+  });
+
+  return parseValidationResult(response.text ?? "");
 }
 
 async function repairDelimitedOutput(rawOutput: string): Promise<Record<string, string>> {
