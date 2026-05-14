@@ -594,8 +594,8 @@ export function getExtractApiUrl(): string {
     return ensureAbsoluteHttpsUrl(explicit);
   }
   const vercelUrl =
-    process.env.VERCEL_URL?.trim() ||
-    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
+    process.env.VERCEL_URL?.trim();
   if (vercelUrl) {
     return `${ensureAbsoluteHttpsUrl(vercelUrl).replace(/\/$/, "")}/api/extract`;
   }
