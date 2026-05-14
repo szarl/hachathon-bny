@@ -17,6 +17,20 @@ export type Stage =
   | "done"
   | "error";
 
+/** Five UI steps (PRD-11); sub-stages roll up to one macro index. */
+export const PROGRESS_STEPS: { label: string; stages: readonly Stage[] }[] = [
+  { label: "Extracting PDF", stages: ["connecting", "extracting", "ocr"] },
+  { label: "Classifying topics", stages: ["classifying"] },
+  { label: "Agent 1 generating", stages: ["generating"] },
+  { label: "Agent 2 validating", stages: ["validating"] },
+  { label: "Complete", stages: ["saving", "done"] },
+];
+
+export function stageToProgressMacroIndex(stage: Stage): number {
+  const idx = PROGRESS_STEPS.findIndex((s) => s.stages.includes(stage));
+  return idx >= 0 ? idx : -1;
+}
+
 type SseEvent =
   | { type: "stage"; stage: string; label: string }
   | { type: "topics"; topics: ClassifiedTopic[] }
@@ -42,6 +56,8 @@ export type ConversionState = {
   outputUrl: string | null;
   metadata: JobMetadata | null;
   error: string | null;
+  /** Macro step index (0–4) when `stage === "error"`; otherwise null. */
+  failedAtMacroIndex: number | null;
 };
 
 export const INITIAL_STATE: ConversionState = {
@@ -58,6 +74,7 @@ export const INITIAL_STATE: ConversionState = {
   outputUrl: null,
   metadata: null,
   error: null,
+  failedAtMacroIndex: null,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,6 +136,10 @@ function handleEvent(prev: ConversionState, event: SseEvent): ConversionState {
         stage: "error",
         stageLabel: "Error",
         error: event.error,
+        failedAtMacroIndex:
+          prev.stage === "error"
+            ? prev.failedAtMacroIndex
+            : stageToProgressMacroIndex(prev.stage),
       };
     default: {
       return prev;
@@ -162,6 +183,10 @@ export function useConversionStream() {
             stage: "error",
             stageLabel: "Error",
             error: message,
+            failedAtMacroIndex:
+              prev.stage === "error"
+                ? prev.failedAtMacroIndex
+                : stageToProgressMacroIndex(prev.stage),
           }));
           return;
         }
@@ -173,6 +198,10 @@ export function useConversionStream() {
             stage: "error",
             stageLabel: "Error",
             error: "Response had no body to read.",
+            failedAtMacroIndex:
+              prev.stage === "error"
+                ? prev.failedAtMacroIndex
+                : stageToProgressMacroIndex(prev.stage),
           }));
           return;
         }
@@ -212,6 +241,10 @@ export function useConversionStream() {
           stage: "error",
           stageLabel: "Error",
           error: message,
+          failedAtMacroIndex:
+            prev.stage === "error"
+              ? prev.failedAtMacroIndex
+              : stageToProgressMacroIndex(prev.stage),
         }));
       }
     },
