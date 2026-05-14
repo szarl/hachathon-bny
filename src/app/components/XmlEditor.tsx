@@ -17,7 +17,7 @@ function pickXmlTextFiles(files: Record<string, string>): Record<string, string>
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[min(50vh,420px)] items-center justify-center rounded-lg border border-zinc-200 bg-zinc-100 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+    <div className="flex h-[min(50vh,420px)] items-center justify-center rounded-lg border border-black/15 bg-black/[0.04] text-sm text-black/60">
       Loading editor…
     </div>
   ),
@@ -103,17 +103,17 @@ export function XmlEditor({ state }: XmlEditorProps) {
   return (
     <section className="flex flex-col gap-2" aria-label="DITA XML preview">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="text-sm font-semibold text-black">
           XML Preview
         </h2>
         {statusLabel ? (
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">{statusLabel}</span>
+          <span className="text-xs text-black/60">{statusLabel}</span>
         ) : null}
       </div>
 
       {hasFileTabs ? (
         <div
-          className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2 dark:border-zinc-700"
+          className="flex flex-wrap gap-1 border-b border-black/15 pb-2"
           role="tablist"
           aria-label="Output files"
         >
@@ -128,8 +128,8 @@ export function XmlEditor({ state }: XmlEditorProps) {
                 onClick={() => setSelectedFile(name)}
                 className={
                   isActive
-                    ? "rounded-md bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-900 dark:bg-blue-950/80 dark:text-blue-100"
-                    : "rounded-md px-2.5 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    ? "rounded-md bg-bny-teal/15 px-2.5 py-1 text-xs font-medium text-bny-navy"
+                    : "rounded-md px-2.5 py-1 text-xs font-medium text-black/70 transition hover:bg-black/5"
                 }
               >
                 {name}
@@ -139,7 +139,7 @@ export function XmlEditor({ state }: XmlEditorProps) {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+      <div className="overflow-hidden rounded-lg border border-black/15">
         <MonacoEditor
           height="min(50vh, 420px)"
           language="xml"

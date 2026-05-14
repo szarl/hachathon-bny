@@ -20,12 +20,12 @@ export function DownloadButton({ state }: DownloadButtonProps) {
 
   return (
     <section
-      className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      className="rounded-xl border border-black/15 bg-white p-5 shadow-sm"
       aria-label="Download output"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-black/70">
             {xmlCount} XML file{xmlCount === 1 ? "" : "s"} · {imageCount} image
             {imageCount === 1 ? "" : "s"} · ZIP ready
           </p>
@@ -33,7 +33,7 @@ export function DownloadButton({ state }: DownloadButtonProps) {
         <button
           type="button"
           onClick={handleDownload}
-          className="rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          className="rounded-lg bg-bny-teal px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-95"
         >
           Download DITA ZIP
         </button>

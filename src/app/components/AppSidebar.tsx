@@ -8,6 +8,7 @@ import {
   ScrollText,
   Settings,
   Upload,
+  Users,
   Waypoints,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,6 +20,7 @@ const primaryNav = [
   { href: "/batch-jobs", label: "Batch Jobs", icon: Waypoints },
   { href: "/configuration", label: "Configuration", icon: Settings },
   { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
+  { href: "/team-management", label: "Team Management", icon: Users },
 ] as const;
 
 const secondaryNav = [
@@ -42,7 +44,7 @@ function NavLink({
       href={href}
       className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
         active
-          ? "bg-[#185FA5] text-white"
+          ? "bg-bny-teal text-white"
           : "text-white/85 hover:bg-white/10 hover:text-white"
       }`}
     >
@@ -57,10 +59,10 @@ export function AppSidebar() {
 
   return (
     <aside
-      className="flex w-60 shrink-0 flex-col border-r border-[#185FA5] bg-[#0C2340] text-white"
+      className="flex w-60 shrink-0 flex-col border-r border-bny-teal bg-bny-navy text-white"
       aria-label="Application navigation"
     >
-      <div className="border-b border-[#185FA5] px-4 py-4">
+      <div className="border-b border-bny-teal px-4 py-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
           Navigation
         </p>
@@ -78,7 +80,7 @@ export function AppSidebar() {
           />
         ))}
       </nav>
-      <div className="border-t border-[#185FA5] px-2 py-4">
+      <div className="border-t border-bny-teal px-2 py-4">
         <nav className="flex flex-col gap-1">
           {secondaryNav.map((item) => (
             <NavLink

@@ -220,7 +220,7 @@ export function UploadZone({
       <div
         aria-labelledby={`${inputId}-label`}
         className={[
-          "flex cursor-pointer flex-col gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-6 transition-colors hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-950 dark:hover:border-zinc-500",
+          "flex cursor-pointer flex-col gap-4 rounded-xl border border-dashed border-black/25 bg-white p-6 transition-colors hover:border-bny-teal/60",
         ].join(" ")}
         onClick={(e) => {
           if ((e.target as HTMLElement).closest("button")) {
@@ -245,7 +245,7 @@ export function UploadZone({
           onChange={handleInputChange}
         />
 
-        <p className="text-center text-base text-zinc-700 dark:text-zinc-300">
+        <p className="text-center text-base text-black">
           Drop a PDF here or click to choose a file (.pdf only, 50&nbsp;MB max)
         </p>
 
@@ -253,10 +253,10 @@ export function UploadZone({
           <button
             type="button"
             className={[
-              "rounded-lg px-6 py-2.5 font-medium shadow-sm outline-none ring-offset-white transition focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-45 dark:ring-offset-zinc-950",
+              "rounded-lg px-6 py-2.5 font-medium text-white shadow-sm outline-none ring-offset-white transition focus-visible:ring-2 focus-visible:ring-bny-teal disabled:opacity-45",
               pipelineRunning || isUploading || !file
-                ? "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                : "bg-blue-900 text-white hover:bg-blue-800 dark:bg-blue-950 dark:hover:bg-blue-900",
+                ? "bg-black/15 text-black/50"
+                : "bg-bny-teal hover:brightness-95",
             ].join(" ")}
             disabled={convertDisabled}
             onClick={(e) => {
@@ -269,9 +269,9 @@ export function UploadZone({
         </div>
 
         {file ? (
-          <p className="text-center text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-center text-sm text-black/70">
             Selected:{" "}
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+            <span className="font-medium text-black">
               {file.name}
             </span>
             {" · "}
@@ -280,7 +280,7 @@ export function UploadZone({
         ) : null}
 
         {localError ? (
-          <p className="text-center text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="text-center text-sm text-red-700" role="alert">
             {localError}
           </p>
         ) : null}

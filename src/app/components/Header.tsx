@@ -3,7 +3,7 @@ import { Bell, Settings, UserRound } from "lucide-react";
 export function Header() {
   return (
     <header
-      className="border-b border-[#185FA5] bg-[#0C2340] text-white shadow-sm"
+      className="border-b border-bny-teal bg-bny-navy text-white shadow-sm"
       role="banner"
     >
       <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
