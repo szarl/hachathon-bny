@@ -1,10 +1,5 @@
-import { PlaceholderPage } from "@/app/components/PlaceholderPage";
+import { TeamManagementClient } from "@/app/components/TeamManagementClient";
 
 export default function TeamManagementPage() {
-  return (
-    <PlaceholderPage
-      title="Team Management"
-      description="Invite collaborators and manage access to the DITA Converter."
-    />
-  );
+  return <TeamManagementClient />;
 }

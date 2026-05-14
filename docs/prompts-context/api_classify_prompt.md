@@ -1,5 +1,3 @@
-# /api/classify — Complete Prompt + Implementation
-
 ## What this route does
 
 Receives raw text extracted page-by-page from a PDF (with font-size metadata).
@@ -22,8 +20,9 @@ The classify prompt handles all of this.
 
 ```
 You are a DITA topic classifier. You receive raw text extracted from a PDF technical document
-and return a JSON array of classified topics. Your output is consumed directly by code — it must
-be valid JSON and nothing else.
+and return a JSON array of classified topics. Each item becomes one DITA 1.3 file in a later
+step: `concept` → `<concept>`, `task` → `<task>`, `reference` → `<reference>`. Your output is
+consumed directly by code — it must be valid JSON and nothing else.
 
 ## OUTPUT FORMAT
 
@@ -39,6 +38,10 @@ interface ClassifiedTopic {
   confidence: "high" | "medium" | "low";
   splitReason: string | null;
   content: string;
+  /** Page numbers from `--- PAGE N ---` headers that contributed to this topic (optional but strongly preferred). */
+  sourcePages?: number[];
+  /** Image filenames listed under `Images:` on those pages that belong in this topic (optional). */
+  relatedImages?: string[];
 }
 
 Output: ClassifiedTopic[]
@@ -74,6 +77,20 @@ Use when the section:
 
 ## SPLITTING RULES
 
+### Topic granularity (each array item becomes one `.dita` file)
+
+The JSON array length equals how many topic files downstream generation will produce. Prefer **fewer, larger** topics.
+
+- Emit a **new topic** only for a **major chapter**: a top-level section that could stand alone as a user-facing chapter (in many PDFs this is the first heading tier, e.g. a single leading number like `1.` / `2.` / `3.` before the first dot in the outline — one topic holds the **entire** chapter body).
+
+- **Subtitles must not become new topics.** Fold subsection content into the parent chapter topic:
+  - Headings with **decimal subsection numbering** (`2.1`, `2.2`, `3.1.2`, etc.) are **never** separate topics; keep them as consecutive blocks inside the same `content` string (you may prefix lines with `## Subtitle` for clarity).
+  - Short in-chapter headings ("About …", "Example", "Calculation for …") stay in that chapter topic unless the **mixed-content rules below** truly require a separate task or reference.
+
+- When unsure whether a block is its own chapter or a subtitle, **merge into the previous topic** instead of adding another array element.
+
+- Use `splitReason` only for splits required by **mixed content** below — not to peel off subtitles.
+
 If a single section contains BOTH concept-type content AND task-type content, split it into
 two separate topics. Set splitReason to explain why you split.
 
@@ -84,6 +101,7 @@ Do NOT split if:
 - A task section contains a short context paragraph before the steps — that stays in the task
 - A concept section contains a short note or figure — that stays in the concept
 - The mixed content is minor (one sentence of one type inside a block of another)
+- The only boundary is a **subsection title** (see Topic granularity above)
 
 ---
 
@@ -125,7 +143,9 @@ Do NOT split if:
    - Continuation lines inside a function call → 4 spaces indent
 
 8. PRESERVE all other content verbatim. Do not paraphrase, summarise, or reorder.
-   Only apply the cleaning rules above.
+   Only apply the cleaning rules above. Do not invent paragraphs, sections, URLs, or cross-references
+   that are not in the source (including `Hyperlinks:` / page text). Fixing obvious OCR typos
+   (e.g. duplicated letters) is allowed when the intended word is unambiguous.
 
 9. DO NOT include the Note that says "This file serves as a sample for the hackathon only."
    — exclude it from the content output.
@@ -133,6 +153,9 @@ Do NOT split if:
 ---
 
 ## FILENAME RULES
+
+The server may normalize basename from `type` + `title`; still emit `suggestedFilename` following
+these conventions so logs and manual inspection stay consistent:
 
 suggestedFilename must follow these conventions exactly:
 - concept: "c_" + snake_case_title  (e.g. "c_manage_2a7_processing")
@@ -149,6 +172,10 @@ Rules:
 ---
 
 ## FEW-SHOT EXAMPLES
+
+These examples demonstrate **JSON shape**, marker usage, and header/footer stripping. In live
+classification, **do not** add subsections, URLs, or paragraphs that are absent from the supplied
+pages (see CONTENT CLEANING rule 8).
 
 ### Input section (concept)
 
@@ -177,7 +204,7 @@ Sample File: Manage 2a-7 Processing Page 1
     "suggestedFilename": "c_manage_2a7_processing",
     "confidence": "high",
     "splitReason": null,
-    "content": "Rule 2a-7, established by the U.S. Securities and Exchange Commission (SEC), ensures the stability and liquidity of money market funds (MMFs). It imposes strict requirements on portfolio composition, maturity limits, credit quality, and valuation methods to minimize risk and maintain a stable net asset value (NAV) of $1.00.\n\nRule 2a-7 authorizes MMFs to use the amortized cost method or the penny-rounding method for asset valuation. However, funds must still conduct a market-value-to-amortized cost comparison for risk purposes, on a monthly basis.\n\nThe European Money Market Fund Regulation (MMFR) governs MMFs within the European Union (EU), setting similar standards for liquidity, diversification, and valuation. MMFR categorizes MMFs into Variable Net Asset Value (VNAV), Constant Net Asset Value (CNAV), and Low Volatility Net Asset Value (LVNAV) funds.\n\n## 2a-7 Workflow\n\nABC's mutual fund accounting solution provides a multi-step workflow for 2a-7 processing, that is, ensuring that money market funds (MMFs) comply with the Rule 2a-7 regulatory standards. The system calculates market value, performs cost-to-market value comparisons, for example, comparing amortized cost against market price, and determines a weighted average maturity for MMF holdings. It also assesses tier determination for each money market holding. The process includes enhancements for MMFR regulations, offering price comparison checks for LVNAV MMFs."
+    "content": "Rule 2a-7, established by the U.S. Securities and Exchange Commission (SEC), ensures the stability and liquidity of money market funds (MMFs). Strict requirements are imposed on portfolio composition, maturity limits, credit quality, and valuation methods to minimize risk and maintain a stable net asset value (NAV) of $1.00.\n\nRule 2a-7 authorizes MMFs to use the amortized cost method or the penny-rounding method for asset valuation. However, funds must still conduct a market-value-to-amortized cost comparison for risk purposes, on a monthly basis.\n\nThe European Money Market Fund Regulation (MMFR) governs MMFs within the European Union (EU), setting similar standards for liquidity, diversification, and valuation. MMFR categorizes MMFs into Variable Net Asset Value (VNAV), Constant Net Asset Value (CNAV), and Low Volatility Net Asset Value (LVNAV) funds."
   }
 ]
 
@@ -224,7 +251,7 @@ Sample File: Manage 2a-7 Processing Page 3
     "suggestedFilename": "t_set_up_master_fund_for_2a7_processing",
     "confidence": "high",
     "splitReason": null,
-    "content": "PREREQ: Before you begin, you can set up entity source rules that provide values for these fields. For more information, see Data and Analytics (https://www.bny.com/corporate/global/en/solutions/platforms/data-and-analytics.html).\n\nCONTEXT: When you set up 2a-7 processing, you must set up several entity-level fields for each master fund that uses 2a-7 processing. You can use the Create Master Fund panel or the Edit Master Fund/Sector panel to set up master funds for 2a-7 processing.\n\nSTEPS:\n1. In Accounting Center, in the left navigation pane, select Setup > Portfolio Setup > Mutual Funds > Create Master Fund.\n   RESULT: You see the Create Master Fund panel where you can add a master fund. Otherwise, you can select the Edit Master Fund/Sector option to change a master fund.\n2. Complete the options on the panel, as appropriate.\n   INFO: For more information about these options, see 2a-7 Processing Settings.\n3. Click Submit.\n4. In the command line, run the following code:\n   CODE:\n   import random\n   import string\n   from datetime import datetime\n   def generate_random_id(length=10, prefix=\"ID\"):\n       chars = string.ascii_uppercase + string.digits\n       random_part = \"\".join(random.choice(chars) for _ in range(length))\n       timestamp = datetime.utcnow().strftime(\"%Y%m%d%H%M%S\")\n       return f\"{prefix}-{timestamp}-{random_part}\"\n   if __name__ == \"__main__\":\n       print(generate_random_id())\n\nRESULT: After you set up the master fund for 2a-7 processing and submit your changes, the system saves the updated master fund configuration and applies the 2a-7 processing settings to the selected fund."
+    "content": "PREREQ: Before you begin, you can set up entity source rules that provide values for these fields. For more information, see Data and Analytics.\n\nCONTEXT: When you set up 2a-7 processing, you must set up several entity-level fields for each master fund that uses 2a-7 processing. You can use the Create Master Fund panel or the Edit Master Fund/Sector panel to set up master funds for 2a-7 processing.\n\nSTEPS:\n1. In Accounting Center, in the left navigation pane, select Setup > Portfolio Setup > Mutual Funds > Create Master Fund.\n   RESULT: You see the Create Master Fund panel where you can add a master fund. Otherwise, you can select the Edit Master Fund/Sector option to change a master fund.\n2. Complete the options on the panel, as appropriate.\n   INFO: For more information about these options, see 2a-7 Processing Settings.\n3. Click Submit.\n4. In the command line, run the following code:\n   CODE:\n   import random\n   import string\n   from datetime import datetime\n   def generate_random_id(length=10, prefix=\"ID\"):\n       chars = string.ascii_uppercase + string.digits\n       random_part = \"\".join(random.choice(chars) for _ in range(length))\n       timestamp = datetime.utcnow().strftime(\"%Y%m%d%H%M%S\")\n       return f\"{prefix}-{timestamp}-{random_part}\"\n   if __name__ == \"__main__\":\n       print(generate_random_id())\n\nRESULT: After you set up the master fund for 2a-7 processing and submit your changes, the system saves the updated master fund configuration and applies the 2a-7 processing settings to the selected fund."
   }
 ]
 
@@ -275,12 +302,16 @@ In the `content` field, use these plain-text markers to signal structure to the 
 - PREREQ:     prerequisite paragraph before steps begin
 - CONTEXT:    background paragraph that sets up why the task is done
 - STEPS:      numbered steps follow
-- RESULT:     step-level result (indent under the step it belongs to)
+- RESULT:     use twice when needed: (1) after a step line, indented — step-level outcome (`RESULT:` under that step); (2) once after all steps — final task `RESULT:` for closing outcome. The string `RESULT:` must appear at least once so downstream can detect task structure.
 - INFO:       additional info under a step (not a result — a note or xref)
 - CODE:       code block follows on the next lines (indented)
-- RESULT:     (at task level, not step level) final paragraph after all steps
 - TABLE:      table follows as pipe-delimited rows
 - NOTE:       a note or warning callout
+
+When the user message includes `Tables (JSON):`, `Hyperlinks:`, or `Images:` blocks for a page,
+use them to improve structure (e.g. pipe `TABLE:` rows from JSON when it matches field-reference
+material) and to set `relatedImages` / factual link text — never fabricate URLs that are not
+in those blocks or in the page text.
 
 These markers make the /api/generate prompt far more reliable because Claude doesn't have to
 re-infer structure from prose — it's already labelled.
@@ -288,221 +319,3 @@ re-infer structure from prose — it's already labelled.
 
 ---
 
-## Full Next.js API route — /app/api/classify/route.ts
-
-```typescript
-import Anthropic from '@anthropic-ai/sdk';
-import { NextRequest, NextResponse } from 'next/server';
-
-const client = new Anthropic();
-
-// Paste the full SYSTEM_PROMPT string from above here
-const SYSTEM_PROMPT = `...`; // <- paste here
-
-export interface ClassifiedTopic {
-  type: 'concept' | 'task' | 'reference';
-  title: string;
-  suggestedFilename: string;
-  confidence: 'high' | 'medium' | 'low';
-  splitReason: string | null;
-  content: string;
-}
-
-export async function POST(req: NextRequest) {
-  const { extractedPages } = await req.json() as {
-    extractedPages: Array<{ pageNumber: number; text: string; fontSizes: number[] }>;
-  };
-
-  const userMessage = buildUserMessage(extractedPages);
-
-  try {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    });
-
-    const rawText = response.content
-      .filter((b) => b.type === 'text')
-      .map((b) => (b as { type: 'text'; text: string }).text)
-      .join('');
-
-    // Strip markdown fences if Claude added them despite instructions
-    const cleaned = rawText
-      .replace(/^```(?:json)?\s*/m, '')
-      .replace(/\s*```\s*$/m, '')
-      .trim();
-
-    let topics: ClassifiedTopic[];
-    try {
-      topics = JSON.parse(cleaned);
-    } catch {
-      // If JSON parse fails, ask Claude to fix it
-      topics = await repairJson(rawText);
-    }
-
-    // Validate every topic has required fields
-    topics = topics.filter(
-      (t) => t.type && t.title && t.suggestedFilename && t.content
-    );
-
-    return NextResponse.json({ topics });
-  } catch (err) {
-    return NextResponse.json(
-      { error: String(err) },
-      { status: 500 }
-    );
-  }
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function buildUserMessage(
-  pages: Array<{ pageNumber: number; text: string; fontSizes: number[] }>
-): string {
-  // Skip cover page (page 1) and TOC page (page 2) automatically
-  const contentPages = pages.filter((p) => p.pageNumber >= 3);
-
-  const pageBlocks = contentPages
-    .map((p) => `--- PAGE ${p.pageNumber} ---\n${p.text}`)
-    .join('\n\n');
-
-  return (
-    `Classify the following extracted PDF text into DITA topics.\n\n` +
-    `Apply all cleaning, normalisation, and splitting rules from the system prompt.\n\n` +
-    pageBlocks
-  );
-}
-
-async function repairJson(brokenOutput: string): Promise<ClassifiedTopic[]> {
-  const repairResponse = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4000,
-    messages: [
-      {
-        role: 'user',
-        content:
-          `The following output was supposed to be a valid JSON array of ClassifiedTopic objects ` +
-          `but failed to parse. Fix the JSON syntax and return only the corrected JSON array, ` +
-          `no markdown fences, no explanation:\n\n${brokenOutput}`,
-      },
-    ],
-  });
-
-  const repairText = repairResponse.content
-    .filter((b) => b.type === 'text')
-    .map((b) => (b as { type: 'text'; text: string }).text)
-    .join('')
-    .replace(/^```(?:json)?\s*/m, '')
-    .replace(/\s*```\s*$/m, '')
-    .trim();
-
-  return JSON.parse(repairText);
-}
-```
-
----
-
-## PDF extractor to pair with this route — /app/api/extract/route.ts
-
-This is the upstream route that feeds classify. Uses pdfplumber via a Python subprocess
-because pdf-parse (Node) loses font metadata needed for heading detection.
-
-```typescript
-import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { randomBytes } from 'crypto';
-
-const execAsync = promisify(exec);
-
-const PYTHON_EXTRACTOR = `
-import sys, json, pdfplumber
-
-path = sys.argv[1]
-pages = []
-
-with pdfplumber.open(path) as pdf:
-    for i, page in enumerate(pdf.pages):
-        text = page.extract_text() or ""
-        words = page.extract_words(extra_attrs=["size", "fontname"])
-        font_sizes = sorted(set(round(w.get("size", 0), 1) for w in words), reverse=True)
-        pages.append({
-            "pageNumber": i + 1,
-            "text": text,
-            "fontSizes": font_sizes[:5]
-        })
-
-print(json.dumps(pages))
-`;
-
-export async function POST(req: NextRequest) {
-  const formData = await req.formData();
-  const file = formData.get('file') as File;
-
-  if (!file) {
-    return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-  }
-
-  const tmpId = randomBytes(8).toString('hex');
-  const pdfPath = join('/tmp', `${tmpId}.pdf`);
-  const pyPath  = join('/tmp', `${tmpId}.py`);
-
-  try {
-    // Write PDF to disk
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(pdfPath, buffer);
-    await writeFile(pyPath, PYTHON_EXTRACTOR);
-
-    // Run extractor
-    const { stdout } = await execAsync(`python3 ${pyPath} ${pdfPath}`);
-    const extractedPages = JSON.parse(stdout);
-
-    return NextResponse.json({ extractedPages });
-  } finally {
-    // Clean up temp files
-    await unlink(pdfPath).catch(() => {});
-    await unlink(pyPath).catch(() => {});
-  }
-}
-```
-
----
-
-## How the three routes connect
-
-```
-POST /api/extract
-  body: FormData { file: File }
-  returns: { extractedPages: Array<{ pageNumber, text, fontSizes }> }
-        ↓
-POST /api/classify
-  body: { extractedPages }
-  returns: { topics: ClassifiedTopic[] }
-        ↓
-POST /api/generate   (SSE stream)
-  body: { documentTitle, topics, productName }
-  streams: XML tokens → Monaco editor
-  final event: { type: "files", files: Record<filename, xmlContent> }
-        ↓
-POST /api/validate
-  body: { files: Record<filename, xmlContent> }
-  returns: { valid: boolean, errors: string[] }
-```
-
----
-
-## Common failure modes and fixes
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| All pages classified as "concept" | Font-size metadata not passed | Ensure extractedPages includes fontSizes array |
-| Task steps appear in concept content | No section boundary detected | Add "To [verb]:" pattern to splitting rules in prompt |
-| Code block indentation lost | pdfplumber flattens indentation | The prompt instructs Claude to restore Python/JS indentation — check the CODE: marker is present |
-| Marketing content included | "OUR VALUE" detection missed | The prompt strips it; if it still appears, add the specific phrase to the cleaning rules |
-| JSON parse error in response | Claude adds ```json fences | The route strips fences before parsing; repairJson() handles the rest |
-| TOC entries appear as topics | Pages not filtered correctly | Ensure buildUserMessage() skips pages 1 and 2 (cover + TOC) |
-| Confidence "low" on all topics | Ambiguous section boundaries | Pass fontSizes to the user message so Claude can use heading size as a signal |

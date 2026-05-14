@@ -126,6 +126,10 @@ test("buildGenerateUserMessage fixes BNY Platform and map.ditamap instructions",
   assert.match(message, /Document title: Fund Operations/);
   assert.match(message, /Product name for keydef: BNY Platform/);
   assert.match(message, /Suggested filename: c_manage_2a7_processing\.dita/);
+  assert.match(message, /Required topic filenames/);
+  assert.match(message, /- c_manage_2a7_processing\.dita/);
+  assert.match(message, /Emit exactly 1 topic file with these names/);
+  assert.match(message, /<shortdesc/);
   assert.match(message, /fixed map\.ditamap file/);
 });
 
@@ -151,6 +155,7 @@ test("buildGenerateUserMessage prepends output budget line when maxOutputTokens 
 
   assert.match(message, /Hard output ceiling for this request: about 12000 model output tokens/);
   assert.match(message, /%%END%% on its own line/);
+  assert.doesNotMatch(message, /drop entire trailing topic/i);
 });
 
 test("parseValidationResult accepts fenced Agent 2 JSON and preserves repaired files", async () => {

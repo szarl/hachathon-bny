@@ -93,8 +93,9 @@ export function buildGeminiOutputBudgetPreamble(
     return (
       `${head}- Emit valid delimited XML: each file starts with %%FILE:filename.ext%%.\n` +
       `- ALWAYS end the entire reply with %%END%% on its own line. map.ditamap MUST be last.\n` +
-      `- If the topic set is large, tighten early: shorter body copy, tighter tables/lists, merge minor sections—never truncate mid-attribute, mid-tag, or mid-file boundary.\n` +
-      `- If you cannot fit everything, drop entire trailing topic bodies or lesser topics cleanly (close tags, keep delimiters legal) rather than starving the closing segment.\n\n`
+      "- The user message lists an exact set of topic filenames and a topic count. Emit exactly that many .dita files (those names only) plus map.ditamap — never add an extra %%FILE:*.dita%% block and never omit one of the listed topics to save space.\n" +
+      "- If the topic set is large, stay inside the ceiling by tightening inside each file: shorter paragraphs, tighter tables/lists, fewer redundant section wrappers, simpler note text. Never truncate mid-attribute, mid-tag, or mid-%%FILE boundary.\n" +
+      '- "Merge minor sections" means within one topic file (e.g. combine small section blocks), not merging whole topics or deleting a whole topic file.\n\n'
     );
   }
 
@@ -107,6 +108,7 @@ export function buildGeminiOutputBudgetPreamble(
 
 export function buildGenerateUserMessage(req: GenerateRequest, options?: BuildGenerateUserOptions): string {
   const documentTitle = req.documentTitle?.trim() || "Untitled document";
+  const expectedDitaFiles = req.topics.map((topic) => ensureDitaExtension(topic.suggestedFilename));
   const topicList = req.topics
     .map(
       (topic, index) =>
@@ -126,14 +128,23 @@ export function buildGenerateUserMessage(req: GenerateRequest, options?: BuildGe
       ? buildGeminiOutputBudgetPreamble(options.maxOutputTokens, "agent1-xml")
       : "";
 
+  const n = expectedDitaFiles.length;
+  const fileWord = n === 1 ? "file" : "files";
+  const expectedList =
+    expectedDitaFiles.map((name) => `- ${name}`).join("\n") +
+    `\nEmit exactly ${n} topic ${fileWord} with these names (plus map.ditamap). No other .dita files.\n\n`;
+
   return (
     budget +
     "Generate DITA XML files for the following document.\n\n" +
     `Document title: ${documentTitle}\n` +
     "Product name for keydef: BNY Platform\n" +
     `Number of topics: ${req.topics.length}\n\n` +
+    "Required topic filenames (Agent 1 output must include one %%FILE%% per line, matching these names):\n" +
+    expectedList +
     `${topicList}\n\n` +
     "Output one .dita file per topic plus one fixed map.ditamap file.\n" +
+    "Each concept, task, and reference topic must include <shortdesc class=\"- topic/shortdesc \"> immediately after <title> (1–2 sentences: purpose for link previews and search).\n" +
     "Use the %%FILE:filename%% and %%END%% delimiters.\n" +
     "The ditamap must be named map.ditamap and must be the last file."
   );

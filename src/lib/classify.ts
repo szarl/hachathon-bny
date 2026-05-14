@@ -1,11 +1,21 @@
 export type TopicType = "concept" | "task" | "reference";
 export type TopicConfidence = "high" | "medium" | "low";
 
+/** PDF link extracted via PyMuPDF (structured; avoids fragile text injection). */
+export type ExtractedHyperlink = {
+  anchorText: string;
+  uri?: string;
+  targetPage?: number;
+};
+
 export type ExtractedPage = {
   pageNumber: number;
   text: string;
   fontSizes?: number[];
   source?: "pdfplumber" | "ocr";
+  /** pdfplumber `extract_tables()` — list of row arrays, cells as strings. */
+  tables?: string[][][];
+  hyperlinks?: ExtractedHyperlink[];
   images?: Array<{
     filename: string;
     pageNumber: number;
@@ -13,7 +23,7 @@ export type ExtractedPage = {
     width?: number;
     height?: number;
     dataBase64?: string;
-    mimeType: "image/png" | "image/jpeg";
+  mimeType: "image/png";
     skipped?: boolean;
     warning?: string;
   }>;
@@ -34,6 +44,60 @@ const TOPIC_TYPES = new Set<TopicType>(["concept", "task", "reference"]);
 const CONFIDENCE_VALUES = new Set<TopicConfidence>(["high", "medium", "low"]);
 const TASK_MARKERS = ["PREREQ:", "CONTEXT:", "STEPS:", "RESULT:"];
 
+const MAX_TABLE_JSON_CHARS = 6000;
+const MAX_URI_IN_CLASSIFY = 120;
+const MAX_HYPERLINK_LINES = 40;
+const MAX_IMAGE_CAPTION_CHARS = 220;
+
+function truncateUri(uri: string): string {
+  if (uri.length <= MAX_URI_IN_CLASSIFY) return uri;
+  return `${uri.slice(0, MAX_URI_IN_CLASSIFY)}…`;
+}
+
+function formatTablesBlock(tables: string[][][] | undefined): string {
+  if (!tables?.length) return "";
+  try {
+    const raw = JSON.stringify(tables);
+    const body =
+      raw.length > MAX_TABLE_JSON_CHARS
+        ? `${raw.slice(0, MAX_TABLE_JSON_CHARS)}\n... (tables JSON truncated)`
+        : raw;
+    return `Tables (JSON):\n${body}\n`;
+  } catch {
+    return "";
+  }
+}
+
+function formatHyperlinksBlock(links: ExtractedHyperlink[] | undefined): string {
+  if (!links?.length) return "";
+  const lines = links.slice(0, MAX_HYPERLINK_LINES).map((link) => {
+    const anchor = link.anchorText || "(no anchor text)";
+    if (link.uri) {
+      return `- "${anchor}" -> ${truncateUri(link.uri)}`;
+    }
+    if (link.targetPage != null) {
+      return `- "${anchor}" -> internal page ${link.targetPage}`;
+    }
+    return `- "${anchor}"`;
+  });
+  return `Hyperlinks:\n${lines.join("\n")}\n`;
+}
+
+function formatImagesBlock(
+  images: NonNullable<ExtractedPage["images"]> | undefined,
+): string {
+  if (!images?.length) return "";
+  const lines = images.map((image) => {
+    const cap =
+      image.caption && image.caption.trim()
+        ? ` — context: ${image.caption.trim().slice(0, MAX_IMAGE_CAPTION_CHARS)}`
+        : "";
+    const skip = image.skipped ? " (skipped)" : "";
+    return `- ${image.filename}${cap}${skip}`;
+  });
+  return `Images:\n${lines.join("\n")}\n`;
+}
+
 export function buildUserMessage(pages: ExtractedPage[]): string {
   const pageBlocks = pages
     .filter((page) => page.pageNumber >= 3)
@@ -41,17 +105,19 @@ export function buildUserMessage(pages: ExtractedPage[]): string {
       const fontSizes = page.fontSizes?.length
         ? `Font sizes: ${page.fontSizes.join(", ")}\n`
         : "";
-      const imageHints = page.images?.length
-        ? `Images: ${page.images.map((image) => image.filename).join(", ")}\n`
-        : "";
+      const tablesBlock = formatTablesBlock(page.tables);
+      const linksBlock = formatHyperlinksBlock(page.hyperlinks);
+      const imagesBlock = formatImagesBlock(page.images);
 
-      return `--- PAGE ${page.pageNumber} ---\n${fontSizes}${imageHints}${page.text}`;
+      return `--- PAGE ${page.pageNumber} ---\n${fontSizes}${tablesBlock}${linksBlock}${imagesBlock}${page.text}`;
     })
     .join("\n\n");
 
   return (
     "Classify the following extracted PDF text into DITA topics.\n\n" +
     "Apply all cleaning, normalisation, and splitting rules from the system prompt.\n\n" +
+    "Hard rule: each JSON object becomes one .dita file. Do not emit one topic per subsection " +
+    "(e.g. headings like 2.1, 2.2, or short in-chapter titles); keep those inside the parent chapter topic's content.\n\n" +
     "When useful, include sourcePages and relatedImages fields using the supplied page numbers and image filenames.\n\n" +
     pageBlocks
   );

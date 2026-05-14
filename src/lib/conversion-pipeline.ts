@@ -262,7 +262,7 @@ async function runAgent1({
         contents: userMessage,
         config: {
           systemInstruction: AGENT_1_SYSTEM_PROMPT,
-          temperature: 0.1,
+          temperature: 0,
           maxOutputTokens: maxOut,
         },
       }),
@@ -283,7 +283,7 @@ async function runAgent1({
       contents: userMessage,
       config: {
         systemInstruction: AGENT_1_SYSTEM_PROMPT,
-        temperature: 0.1,
+        temperature: 0,
         maxOutputTokens: maxOut,
       },
     }),

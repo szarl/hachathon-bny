@@ -43,17 +43,27 @@ This document records the shared design decisions that refine the PRD pack. The 
 - Local development can keep the existing rewrite from `/api/extract` to `http://127.0.0.1:8001/api/extract`.
 - Production should use `EXTRACT_API_URL` or an equivalent Vercel routing setup.
 - The extractor owns text, font-size metadata, image detection, and image extraction.
+- **Rich layout (2026-05-14):** The Python extractor uses **pdfplumber** for text, tables, and embedded-image rasterization, and **PyMuPDF (`pymupdf`)** on the same file path for the same page index. Both libraries must agree on page count; a mismatch is a hard error. PyMuPDF supplies **hyperlink metadata** and **short text snippets near image bounding boxes** (stored as `caption` on each image object). We intentionally do **not** inject `[URI: …]` markers into `text` with `re.sub`; hyperlinks are returned as a **structured array** so classifiers and generators can reason about links when overlay text and flow text disagree.
 
 ## Extraction response shape
 
 The extractor should return:
 
 ```ts
+type ExtractedHyperlink = {
+  anchorText: string;
+  uri?: string;
+  targetPage?: number; // 1-based internal destination when kind is in-document
+};
+
 type ExtractedPage = {
   pageNumber: number;
   text: string;
   fontSizes: number[];
   source?: "pdfplumber" | "ocr";
+  /** pdfplumber extract_tables — list of tables, each table is rows of string cells */
+  tables?: string[][][];
+  hyperlinks?: ExtractedHyperlink[];
   images?: ExtractedImage[];
 };
 
@@ -64,13 +74,21 @@ type ExtractedImage = {
   width?: number;
   height?: number;
   dataBase64?: string;
-  mimeType: "image/png" | "image/jpeg";
+  /** Extractor emits PNG only (normalized width and size). */
+  mimeType: "image/png";
   skipped?: boolean;
   warning?: string;
 };
 ```
 
-Base64 image payloads should be capped at about 2 MB per image and 10 MB total per PDF. Oversized images should be reported as skipped asset warnings.
+- Omit `tables` and `hyperlinks` when empty to keep payloads small.
+- Table and link extraction apply **server-side caps** (tables per page, rows/cols, links per page, URI and anchor string lengths) to control token load downstream.
+- Image filenames stay **`page_XX_image_YY.ext`** so `collectExtractedAssets`, deterministic checks, and Agent 1 `href` rules stay aligned.
+- Base64 image payloads must be **PNG** only: resized so the raster width is at most **1000 px** (aspect ratio preserved), then compressed to **at most 200 KB** per image (further downscale if needed). A **10 MB** total cap per PDF still applies across all images. Images that cannot be normalized within those limits are reported as skipped asset warnings.
+
+## Classification input from extraction
+
+- `buildUserMessage` in `src/lib/classify.ts` includes, for each content page (still **`pageNumber >= 3`** only): font sizes, optional **tables as JSON** (truncated), **hyperlinks** (URIs truncated for the prompt), **images with optional caption/context**, then the page `text`. This encodes the same intent as the reference Streamlit normalizer while keeping the **classify → generate** pipeline in TypeScript.
 
 ## OCR fallback
 
@@ -80,6 +98,8 @@ Base64 image payloads should be capped at about 2 MB per image and 10 MB total p
 
 ## Classification
 
+- Classifier **inputs** are assembled in `buildUserMessage`; see **Classification input from extraction** (fonts, truncated tables JSON, hyperlinks, image captions, then plain text for pages with `pageNumber >= 3`). The user turn also states that each JSON topic becomes one `.dita` file and subsection headings must not spawn extra topics.
+- Prefer **chapter-level** topics: subsection titles (e.g. `2.1`, `2.2`) stay inside the parent topic `content`; split only for mixed concept/task/reference boundaries per the classify prompt.
 - The classifier output should include the PRD fields plus source and image hints:
 
 ```ts
@@ -138,7 +158,7 @@ Agent 1 streams delimiter-based plain text:
   - XML is basically well formed using `fast-xml-parser`.
   - Every `<image href="images/...">` points to an available extracted asset.
   - Every image has alt text.
-- Agent 2 remains the main validation and repair step. It receives files plus deterministic issues and returns final repaired files and a validation report.
+- Agent 2 remains the main validation and repair step. It receives files plus deterministic issues and returns final repaired files and a validation report. Its system prompt also instructs **editorial** passes on returned XML: fix obvious spelling and grammar in narrative text, prefer **active voice** over weak passive where clear, replace Latin abbreviations (i.e., e.g., etc., viz., et al.) with plain English, and skip changes inside `codeblock` / `codeph` / paths that must stay verbatim. Topic files must include **`<shortdesc>`** after `<title>` for link previews and search.
 
 ## Images and DITA assets
 

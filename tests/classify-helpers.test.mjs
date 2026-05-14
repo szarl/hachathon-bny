@@ -32,6 +32,40 @@ test("buildUserMessage skips cover and TOC pages while preserving content pages"
   assert.match(message, /--- PAGE 3 ---\nFont sizes: 16, 10\nSet Up Master Fund/);
 });
 
+test("buildUserMessage includes tables hyperlinks and image captions on content pages", async () => {
+  const { buildUserMessage } = await loadClassifyHelpers();
+
+  const message = buildUserMessage([
+    {
+      pageNumber: 3,
+      text: "Body paragraph.",
+      tables: [[["A", "B"], ["1", "2"]]],
+      hyperlinks: [
+        { anchorText: "See docs", uri: "https://example.com/very-long-path" + "/x".repeat(200) },
+        { anchorText: "Jump", targetPage: 10 },
+      ],
+      images: [
+        {
+          filename: "page_03_image_01.png",
+          pageNumber: 3,
+          mimeType: "image/png",
+          caption: "Figure 1: Widget overview text",
+        },
+      ],
+    },
+  ]);
+
+  assert.match(message, /Tables \(JSON\):/);
+  assert.match(message, /\[\[\["A","B"\]/);
+  assert.match(message, /Hyperlinks:/);
+  assert.match(message, /"See docs"/);
+  assert.match(message, /internal page 10/);
+  assert.match(message, /Images:/);
+  assert.match(message, /page_03_image_01\.png/);
+  assert.match(message, /Figure 1: Widget overview/);
+  assert.match(message, /Body paragraph\./);
+});
+
 test("parseClassifiedTopics strips markdown fences and normalizes usable topics", async () => {
   const { parseClassifiedTopics } = await loadClassifyHelpers();
 
