@@ -12,6 +12,7 @@ import { getErrorMessage } from "@/lib/error-message";
 import { geminiModels, getGeminiClient } from "@/lib/gemini";
 import { CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type ClassifyRequestBody = {
