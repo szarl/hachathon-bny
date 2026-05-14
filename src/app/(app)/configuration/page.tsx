@@ -1,10 +1,5 @@
-import { PlaceholderPage } from "@/app/components/PlaceholderPage";
+import { ConfigurationClient } from "@/app/components/ConfigurationClient";
 
 export default function ConfigurationPage() {
-  return (
-    <PlaceholderPage
-      title="Configuration"
-      description="Application settings and pipeline options."
-    />
-  );
+  return <ConfigurationClient />;
 }

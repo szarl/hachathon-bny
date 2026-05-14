@@ -24,6 +24,13 @@ type CreateJobResult = {
   pdfUrl: string;
 };
 
+export type CreateJobOptions = {
+  /** Stored in `jobs.metadata` (e.g. extra tags). */
+  metadata?: Record<string, unknown>;
+  /** FK to `public.batches.id`; also written to `metadata.batch_id` for filters. */
+  batchId?: string;
+};
+
 type JobInsertResult = {
   id?: string;
 };
@@ -47,6 +54,19 @@ export function buildUploadPath(jobId: string, filename: string, now = new Date(
   return `${jobId}/${timestamp}-${sanitizeStorageFilename(filename)}`;
 }
 
+/** Same rules as upload UI: derive DITA map/title from PDF filename. */
+export function documentTitleFromFilename(filename: string): string {
+  const base = filename.replace(/\.pdf$/i, "");
+  return (
+    base
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() ||
+    filename.replace(/\.pdf$/i, "") ||
+    "Document"
+  );
+}
+
 export function sanitizeStorageFilename(filename: string): string {
   const basename = filename.split(/[\\/]/).pop() ?? "document.pdf";
   const withoutExtension = basename.replace(/\.pdf$/i, "");
@@ -65,6 +85,7 @@ export async function createJobFromPdf(
   file: File,
   supabase: SupabaseLike,
   now = new Date(),
+  options?: CreateJobOptions,
 ): Promise<CreateJobResult> {
   const validationError = validatePdfUpload(file);
 
@@ -72,9 +93,24 @@ export async function createJobFromPdf(
     throw new Error(validationError);
   }
 
+  const meta: Record<string, unknown> = { ...(options?.metadata ?? {}) };
+  const batchIdTrimmed = options?.batchId?.trim();
+  if (batchIdTrimmed) {
+    meta.batch_id = batchIdTrimmed;
+  }
+
+  const insertRow: Record<string, unknown> = {
+    filename: file.name,
+    status: "pending",
+    metadata: Object.keys(meta).length > 0 ? meta : {},
+  };
+  if (batchIdTrimmed) {
+    insertRow.batch_id = batchIdTrimmed;
+  }
+
   const { data: job, error: insertError } = await supabase
     .from("jobs")
-    .insert({ filename: file.name, status: "pending" })
+    .insert(insertRow)
     .select("id")
     .single();
 

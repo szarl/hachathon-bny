@@ -1,6 +1,6 @@
 # DITA Converter Architecture Decisions
 
-Last updated: 2026-05-13
+Last updated: 2026-05-14
 
 This document records the shared design decisions that refine the PRD pack. The split PRDs remain the delivery checklist, but implementation should follow these decisions when a PRD conflicts with the current repo, `AGENTS.md`, or the prompt context files.
 
@@ -24,6 +24,7 @@ This document records the shared design decisions that refine the PRD pack. The 
 - The browser should not orchestrate extract, classify, and generate calls.
 - The browser uploads the PDF to `POST /api/jobs`; the server creates a job row, uploads the PDF to Supabase Storage, stores `jobs.pdf_url`, and returns `jobId`.
 - The browser then starts one SSE request to `POST /api/generate` with `{ jobId, documentTitle }`.
+- **Batch Jobs** (multi-PDF): `POST /api/batches` runs only when the user clicks **Upload and convert batch** (not on page load). That creates one `public.batches` row for the run; each PDF uploads with `batch_id` so `jobs.batch_id` (FK) and `metadata.batch_id` are set. Conversions run as **multiple parallel** `POST /api/batch/run` requests (one `jobId` each, client-side concurrency cap in `batch-config.ts`). The route uses shared `conversion-pipeline.ts` with non-streaming Agent 1 and JSON responses. Batch history reads `batches` plus job rows (expand uses `batch_id` or legacy `metadata.batch_id`).
 - `/api/generate` owns the full backend pipeline:
   1. Look up the job and `pdf_url`.
   2. Fetch the uploaded PDF.

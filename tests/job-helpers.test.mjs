@@ -1,20 +1,38 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import ts from "typescript";
 
-async function loadJobHelpers() {
-  const sourcePath = new URL("../src/lib/jobs.ts", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true,
-    },
-  }).outputText;
+const TS_OPTS = {
+  compilerOptions: {
+    module: ts.ModuleKind.ES2022,
+    target: ts.ScriptTarget.ES2022,
+    verbatimModuleSyntax: true,
+  },
+};
 
-  const encoded = Buffer.from(transpiled, "utf8").toString("base64");
+async function loadJobHelpers() {
+  const jobsPath = fileURLToPath(new URL("../src/lib/jobs.ts", import.meta.url));
+  const errorMessagePath = fileURLToPath(new URL("../src/lib/error-message.ts", import.meta.url));
+
+  const [jobsSource, errorMessageSource] = await Promise.all([
+    readFile(jobsPath, "utf8"),
+    readFile(errorMessagePath, "utf8"),
+  ]);
+
+  const errorMessageJs = ts.transpileModule(errorMessageSource, TS_OPTS).outputText;
+
+  let jobsJs = ts.transpileModule(jobsSource, TS_OPTS).outputText;
+  jobsJs = jobsJs
+    .replace('import { getErrorMessage } from "@/lib/error-message";\r\n', "")
+    .replace('import { getErrorMessage } from "@/lib/error-message";\n', "")
+    .replace('export { getErrorMessage } from "@/lib/error-message";\r\n', "")
+    .replace('export { getErrorMessage } from "@/lib/error-message";\n', "");
+
+  const combined = `${errorMessageJs}\n${jobsJs}`;
+
+  const encoded = Buffer.from(combined, "utf8").toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
 }
 
@@ -99,7 +117,11 @@ test("createJobFromPdf inserts a pending row, uploads the PDF, stores the public
     jobId: "job-123",
     pdfUrl: "https://example.supabase.co/storage/v1/object/public/uploads/job-123/20260514T102030000Z-quarterly-report.pdf",
   });
-  assert.deepEqual(calls[0], ["insert", "jobs", { filename: "Quarterly Report.pdf", status: "pending" }]);
+  assert.deepEqual(calls[0], [
+    "insert",
+    "jobs",
+    { filename: "Quarterly Report.pdf", status: "pending", metadata: {} },
+  ]);
   assert.deepEqual(calls[2].slice(0, 4), [
     "upload",
     "uploads",
@@ -114,6 +136,56 @@ test("createJobFromPdf inserts a pending row, uploads the PDF, stores the public
       error: null,
     },
   ]);
+});
+
+test("createJobFromPdf sets batch_id column and metadata when batchId option is set", async () => {
+  const { createJobFromPdf } = await loadJobHelpers();
+  const { supabase, calls } = createSupabaseMock();
+  const file = new File(["%PDF"], "Report.pdf", { type: "application/pdf" });
+  const bid = "550e8400-e29b-41d4-a716-446655440000";
+
+  await createJobFromPdf(file, supabase, new Date("2026-05-14T10:20:30.000Z"), { batchId: bid });
+
+  assert.deepEqual(calls[0], [
+    "insert",
+    "jobs",
+    {
+      filename: "Report.pdf",
+      status: "pending",
+      batch_id: bid,
+      metadata: { batch_id: bid },
+    },
+  ]);
+});
+
+test("createJobFromPdf merges custom metadata with batch_id when both provided", async () => {
+  const { createJobFromPdf } = await loadJobHelpers();
+  const { supabase, calls } = createSupabaseMock();
+  const file = new File(["%PDF"], "Report.pdf", { type: "application/pdf" });
+  const bid = "660e8400-e29b-41d4-a716-446655440001";
+
+  await createJobFromPdf(file, supabase, new Date("2026-05-14T10:20:30.000Z"), {
+    batchId: bid,
+    metadata: { source: "batch-ui" },
+  });
+
+  assert.deepEqual(calls[0], [
+    "insert",
+    "jobs",
+    {
+      filename: "Report.pdf",
+      status: "pending",
+      batch_id: bid,
+      metadata: { source: "batch-ui", batch_id: bid },
+    },
+  ]);
+});
+
+test("documentTitleFromFilename mirrors upload-zone filename rules", async () => {
+  const { documentTitleFromFilename } = await loadJobHelpers();
+
+  assert.equal(documentTitleFromFilename("Q1_Report-final.PDF"), "Q1 Report final");
+  assert.equal(documentTitleFromFilename("single.pdf"), "single");
 });
 
 test("createJobFromPdf marks the job error when storage upload fails", async () => {

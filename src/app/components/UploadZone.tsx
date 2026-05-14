@@ -5,19 +5,9 @@ import { useCallback, useId, useRef, useState } from "react";
 import type { ConversionState } from "@/app/hooks/useConversionStream";
 
 import { getErrorMessage } from "@/lib/error-message";
-import { validatePdfUpload } from "@/lib/jobs";
+import { documentTitleFromFilename, validatePdfUpload } from "@/lib/jobs";
 
-export function documentTitleFromFilename(filename: string): string {
-  const base = filename.replace(/\.pdf$/i, "");
-  return (
-    base
-      .replace(/[-_]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim() ||
-    filename.replace(/\.pdf$/i, "") ||
-    "Document"
-  );
-}
+export { documentTitleFromFilename } from "@/lib/jobs";
 
 export type UploadZoneProps = {
   startConversion: (args: {

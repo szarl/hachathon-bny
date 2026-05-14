@@ -7,6 +7,20 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const BATCH_ID_MAX_LEN = 128;
+
+function parseBatchId(formData: FormData): string | undefined {
+  const raw = formData.get("batch_id");
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed.length || trimmed.length > BATCH_ID_MAX_LEN) {
+    return undefined;
+  }
+  return trimmed;
+}
+
 export async function POST(req: NextRequest) {
   let formData: FormData;
 
@@ -28,8 +42,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
+  const batchId = parseBatchId(formData);
+  const jobOptions = batchId ? { batchId } : undefined;
+
   try {
-    const result = await createJobFromPdf(file, getSupabaseAdmin());
+    const result = await createJobFromPdf(file, getSupabaseAdmin(), new Date(), jobOptions);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
