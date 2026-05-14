@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
       const out = await runConversionPipeline({
         body: { jobId, documentTitle },
         agent1Mode: "single",
+        requestOrigin: getRequestOrigin(req),
       });
 
       results.push({
@@ -104,4 +105,15 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ results });
+}
+
+function getRequestOrigin(req: NextRequest): string {
+  const forwardedProto = req.headers.get("x-forwarded-proto") ?? "https";
+  const forwardedHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  return new URL(req.url).origin;
 }

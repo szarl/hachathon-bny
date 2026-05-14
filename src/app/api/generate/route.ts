@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
           body,
           agent1Mode: "stream",
           emit: (event) => send(event),
+          requestOrigin: getRequestOrigin(req),
         });
       } catch (error) {
         const message = getErrorMessage(error);
@@ -65,6 +66,17 @@ export async function POST(req: NextRequest) {
       Connection: "keep-alive",
     },
   });
+}
+
+function getRequestOrigin(req: NextRequest): string {
+  const forwardedProto = req.headers.get("x-forwarded-proto") ?? "https";
+  const forwardedHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  return new URL(req.url).origin;
 }
 
 async function setJobStatus(

@@ -89,6 +89,7 @@ export async function runConversionPipeline(args: {
   body: ConversionPipelineBody;
   agent1Mode: "stream" | "single";
   emit?: (event: ConversionSseEvent) => void;
+  requestOrigin?: string;
 }): Promise<ConversionPipelineOutput> {
   const { body, agent1Mode } = args;
   const emit = args.emit ?? (() => undefined);
@@ -97,7 +98,7 @@ export async function runConversionPipeline(args: {
     tokenUsageCalls.push(usage);
   };
 
-  const { topics, assets } = await resolveTopics(body, emit, recordTokenUsage);
+  const { topics, assets } = await resolveTopics(body, emit, recordTokenUsage, args.requestOrigin);
 
   if (topics.length === 0) {
     throw new Error("No classified topics are available for DITA generation.");
@@ -257,6 +258,7 @@ async function resolveTopics(
   body: ConversionPipelineBody,
   emit: (event: ConversionSseEvent) => void,
   onTokenUsage: (usage: TokenUsageCall) => void,
+  requestOrigin?: string,
 ): Promise<ResolvedGenerationInput> {
   if (Array.isArray(body.topics)) {
     return { topics: normalizeClassifiedTopics(body.topics), assets: [] };
@@ -270,7 +272,7 @@ async function resolveTopics(
   await setJobStatus(body.jobId, "extracting");
 
   const pdfUrl = await getJobPdfUrl(body.jobId);
-  const extractedPages = await extractPdf(pdfUrl);
+  const extractedPages = await extractPdf(pdfUrl, requestOrigin);
   const extractedAssets = collectExtractedAssets(extractedPages);
 
   emit({ type: "stage", stage: "classifying", label: "Classifying topics" });
@@ -553,7 +555,7 @@ async function getJobPdfUrl(jobId: string): Promise<string> {
   return job.pdf_url;
 }
 
-async function extractPdf(pdfUrl: string): Promise<ExtractedPage[]> {
+async function extractPdf(pdfUrl: string, requestOrigin?: string): Promise<ExtractedPage[]> {
   const pdfResponse = await fetch(pdfUrl);
 
   if (!pdfResponse.ok) {
@@ -563,7 +565,7 @@ async function extractPdf(pdfUrl: string): Promise<ExtractedPage[]> {
   const formData = new FormData();
   formData.append("file", await pdfResponse.blob(), "source.pdf");
 
-  const extractApiUrl = getExtractApiUrl();
+  const extractApiUrl = getExtractApiUrl(requestOrigin);
   const extractResponse = await fetch(extractApiUrl, {
     method: "POST",
     headers: {
@@ -588,10 +590,13 @@ async function extractPdf(pdfUrl: string): Promise<ExtractedPage[]> {
   return payload.extractedPages;
 }
 
-export function getExtractApiUrl(): string {
+export function getExtractApiUrl(requestOrigin?: string): string {
   const explicit = process.env.EXTRACT_API_URL?.trim();
   if (explicit) {
     return ensureAbsoluteHttpsUrl(explicit);
+  }
+  if (requestOrigin?.trim()) {
+    return `${ensureAbsoluteHttpsUrl(requestOrigin.trim()).replace(/\/$/, "")}/api/extract`;
   }
   const vercelUrl =
     process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
