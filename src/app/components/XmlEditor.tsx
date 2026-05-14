@@ -178,6 +178,8 @@ export function XmlEditor({ state }: XmlEditorProps) {
             readOnly: !canEdit,
             minimap: { enabled: false },
             fontSize: 13,
+            wordWrap: "on",
+            wrappingIndent: "same",
           }}
         />
       </div>

@@ -97,6 +97,7 @@ export function DownloadButton({ state }: DownloadButtonProps) {
       </div>
 
       <HtmlPreviewModal
+        key={previewOpen && previewUrl ? previewUrl : "html-preview-closed"}
         open={previewOpen}
         url={previewUrl ?? null}
         onClose={closePreview}

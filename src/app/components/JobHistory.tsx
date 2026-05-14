@@ -249,6 +249,7 @@ export function JobHistory() {
       </div>
 
       <HtmlPreviewModal
+        key={previewModalUrl ?? "html-preview-closed"}
         open={previewModalUrl != null}
         url={previewModalUrl}
         onClose={() => setPreviewModalUrl(null)}

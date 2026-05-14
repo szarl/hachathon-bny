@@ -1,7 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ConversionState } from "@/app/hooks/useConversionStream";
 import {
@@ -9,12 +9,37 @@ import {
   stageToProgressMacroIndex,
 } from "@/app/hooks/useConversionStream";
 
+const BUSY_PHRASES = ["Thinking", "Processing", "Working", "Extracting"] as const;
+
 type ProgressIndicatorProps = {
   state: ConversionState;
 };
 
 export function ProgressIndicator({ state }: ProgressIndicatorProps) {
   const [issuesExpanded, setIssuesExpanded] = useState(true);
+  const [busyPhraseIndex, setBusyPhraseIndex] = useState(0);
+  const [busyDotIndex, setBusyDotIndex] = useState(0);
+
+  const showAnimatedBusy =
+    state.stage !== "idle" &&
+    state.stage !== "done" &&
+    state.stage !== "error";
+
+  useEffect(() => {
+    if (!showAnimatedBusy) {
+      return;
+    }
+    const dotsId = window.setInterval(() => {
+      setBusyDotIndex((i) => (i + 1) % 3);
+    }, 400);
+    const phraseId = window.setInterval(() => {
+      setBusyPhraseIndex((i) => (i + 1) % BUSY_PHRASES.length);
+    }, 1500);
+    return () => {
+      window.clearInterval(dotsId);
+      window.clearInterval(phraseId);
+    };
+  }, [showAnimatedBusy]);
 
   const macroRunning = stageToProgressMacroIndex(state.stage);
   const activeMacroIndex =
@@ -91,7 +116,8 @@ export function ProgressIndicator({ state }: ProgressIndicatorProps) {
                     aria-hidden
                   />
                 )}
-                {i < PROGRESS_STEPS.length - 1 ? (
+                {i < PROGRESS_STEPS.length - 1 ||
+                (i === PROGRESS_STEPS.length - 1 && showAnimatedBusy) ? (
                   <span
                     className="my-0.5 w-px grow min-h-[14px] bg-black/15"
                     aria-hidden
@@ -125,6 +151,34 @@ export function ProgressIndicator({ state }: ProgressIndicatorProps) {
           );
         })}
       </ol>
+
+      {showAnimatedBusy ? (
+        <div
+          className="flex gap-3"
+          role="status"
+          aria-live="polite"
+          aria-label="Background activity"
+        >
+          <div className="flex w-6 flex-col items-center pt-0">
+            <span
+              className="my-0.5 w-px min-h-[14px] shrink-0 bg-black/15"
+              aria-hidden
+            />
+            <span
+              className="mt-0.5 h-3 w-3 shrink-0 rounded-full border-2 border-black/20 bg-black/5"
+              aria-hidden
+            />
+          </div>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <span className="text-sm text-black/60">
+              {BUSY_PHRASES[busyPhraseIndex % BUSY_PHRASES.length]}
+              <span className="inline-block min-w-[1.25em] tabular-nums">
+                {busyDotIndex === 0 ? "." : busyDotIndex === 1 ? ".." : "..."}
+              </span>
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {showValidationBadge ? (
         <div className="mt-2 border-t border-black/15 pt-4">
