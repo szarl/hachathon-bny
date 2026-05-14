@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map id="ditamap-1111" class="- map/map ">
+    <title class="- topic/title ">Test File 5 Understand Caps and Floors</title>
+    <topicref href="c_about_caps_and_floors.dita" class="- map/topicref "/>
+    <topicref href="c_set_up_entities_for_caps.dita" class="- map/topicref "/>
+    <topicref href="r_entity_settings_for_caps_and.dita" class="- map/topicref "/>
+    <topicref href="c_set_up_securities_for_caps.dita" class="- map/topicref "/>
+    <topicref href="r_caps_and_floors_key_options.dita" class="- map/topicref "/>
+    <topicref href="c_understand_open_capfloor_transactions.dita" class="- map/topicref "/>
+    <keydef keys="product-name" class="+ map/topicref mapgroup-d/keydef ">
+        <topicmeta class="- map/topicmeta ">
+            <keywords class="- topic/keywords ">
+                <keyword class="- topic/keyword ">BNY Platform</keyword>
+            </keywords>
+        </topicmeta>
+    </keydef>
+</map>

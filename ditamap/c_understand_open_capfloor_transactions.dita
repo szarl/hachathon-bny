@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="concept-2468" class="- topic/topic concept/concept ">
+    <title class="- topic/title ">Understand Open Cap/Floor Transactions</title>
+    <shortdesc class="- topic/shortdesc ">Explains the system processes triggered when opening a cap/floor contract, including premium calculations and ledger updates.</shortdesc>
+    <conbody class="- topic/body  concept/conbody ">
+        <p class="- topic/p ">Opening a cap/floor contract triggers premium calculations, inventory position creation, and general ledger updates. Premiums are paid upfront and amortized over the contract life.</p>
+        <section class="- topic/section ">
+            <title class="- topic/title ">Calculation for Open Cap/Floor Transaction</title>
+            <p class="- topic/p ">The system uses the following formulas:</p>
+            <ul class="- topic/ul ">
+                <li class="- topic/li ">Local Premium Value = (Quantity * Quantity Scale) * (Price per Contract * Price Multiplier)</li>
+                <li class="- topic/li ">Base Premium Value = Local Premium Value / Spot Exchange Rate to Base</li>
+            </ul>
+        </section>
+    </conbody>
+</concept>

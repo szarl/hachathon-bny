@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="concept-3456" class="- topic/topic concept/concept ">
+    <title class="- topic/title ">Set Up Securities for Caps and Floors</title>
+    <shortdesc class="- topic/shortdesc ">Explains how to establish cap/floor security master records and configure coupon types for accurate accrual calculations.</shortdesc>
+    <conbody class="- topic/body  concept/conbody ">
+        <p class="- topic/p ">Use Reference Data Center or the Accounting Center Issue Viewer to create a cap/floor Security Master File (SMF) record. Ensure that First Coupon Date, Last Coupon Date, and Maturity Date values do not include Delay Days.</p>
+        <section class="- topic/section ">
+            <title class="- topic/title ">Coupon Setup</title>
+            <p class="- topic/p "><ph keyref="product-name" class="- topic/ph "/> supports Variable Rate, Unscheduled Variable Rate, Floating Rate, and Inverse Floating Rate coupon types. For Floating Rate types, the system adds the Index Offset (tag 215) to the underlying security coupon rate and compares the sum against the Strike Rate.</p>
+        </section>
+        <section class="- topic/section ">
+            <title class="- topic/title ">Cap Coupon Rate Example</title>
+            <p class="- topic/p ">For a Cap with an 8% strike and 250 bps offset, if the total rate is 8.5%, the system accrues the 0.5% difference. If subsequent rates are below 8%, the accrual is 0.00%.</p>
+        </section>
+    </conbody>
+</concept>

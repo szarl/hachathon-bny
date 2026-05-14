@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="concept-5678" class="- topic/topic concept/concept ">
+    <title class="- topic/title ">Set Up Entities for Caps and Floors</title>
+    <shortdesc class="- topic/shortdesc ">Describes entity-level configuration requirements for cap and floor processing, including netting options and technical short eligibility.</shortdesc>
+    <conbody class="- topic/body  concept/conbody ">
+        <p class="- topic/p "><ph keyref="product-name" class="- topic/ph "/> requires specific entity-level field configuration before trading cap/floor contracts to ensure correct processing and tool functionality.</p>
+        <section class="- topic/section ">
+            <title class="- topic/title ">Treating the Cap/Floor as Two Separate Positions</title>
+            <p class="- topic/p ">If the <uicontrol class="+ topic/ph ui-d/uicontrol ">Net Cap Floor</uicontrol> field is set to <option class="+ topic/keyword pr-d/option ">No</option>, the system stores separate long and short positions. The <uicontrol class="+ topic/ph ui-d/uicontrol ">Tech Short Eligible Indicator</uicontrol> (tag 57) determines if a position can go technically short.</p>
+        </section>
+        <section class="- topic/section ">
+            <title class="- topic/title ">Netting the Cap/Floor to a Single Position</title>
+            <p class="- topic/p ">If the <uicontrol class="+ topic/ph ui-d/uicontrol ">Net Cap Floor</uicontrol> field is set to <option class="+ topic/keyword pr-d/option ">Yes</option>, the system stores one net position. Longs and shorts are netted, and the position is always allowed to go technically short, overriding the <uicontrol class="+ topic/ph ui-d/uicontrol ">Tech Short Eligible Indicator</uicontrol> setting.</p>
+        </section>
+    </conbody>
+</concept>
