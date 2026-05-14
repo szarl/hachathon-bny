@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/extract.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{node_modules/**,.next/**,src/**,public/**,docs/**,tests/**,.git/**}"
+    },
+    "src/app/api/generate/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}

@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:classify": "node --test tests/classify-helpers.test.mjs"
+    "test:classify": "node --test tests/classify-helpers.test.mjs",
+    "test:e2e:prod-smoke": "node tests/e2e-prod-smoke.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.2.0",

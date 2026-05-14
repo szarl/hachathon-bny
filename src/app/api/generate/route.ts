@@ -369,7 +369,15 @@ async function extractPdf(pdfUrl: string): Promise<ExtractedPage[]> {
 }
 
 function getExtractApiUrl(): string {
-  return process.env.EXTRACT_API_URL ?? "http://127.0.0.1:8001/api/extract";
+  const explicit = process.env.EXTRACT_API_URL?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) {
+    return `https://${vercelUrl}/api/extract`;
+  }
+  return "http://127.0.0.1:8001/api/extract";
 }
 
 async function setJobStatus(

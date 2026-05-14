@@ -181,6 +181,10 @@ class handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8001"))
-    server = HTTPServer(("127.0.0.1", port), handler)
-    print(f"Python extract API listening on http://127.0.0.1:{port}/api/extract")
+    host = os.environ.get("BIND_ADDRESS", "127.0.0.1")
+    server = HTTPServer((host, port), handler)
+    print(
+        f"Python extract API listening on http://{host}:{port}/api/extract",
+        flush=True,
+    )
     server.serve_forever()
