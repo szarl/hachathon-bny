@@ -8,7 +8,8 @@
     "dev:vercel": "vercel dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:classify": "node --test tests/classify-helpers.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.2.0",
