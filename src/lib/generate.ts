@@ -1,4 +1,5 @@
 import type { ClassifiedTopic, ExtractedPage } from "./classify";
+import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";
 import { getErrorMessage } from "@/lib/error-message";
 import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";
 
@@ -39,6 +40,12 @@ export type JobMetadata = {
   validationIssueCount: number;
   /** True when `GEMINI_AGENT2_ENABLED` disabled Agent 2 on the server. */
   agent2ValidationSkipped?: boolean;
+  /** DITA-OT HTML5 generation: `skipped` when `DITA_OT_ENABLED` unset. */
+  htmlGenerationStatus?: "ok" | "skipped" | "failed";
+  htmlFileCount?: number;
+  htmlPreviewUrl?: string;
+  htmlEntryRelativePath?: string;
+  htmlGenerationMessage?: string;
 };
 
 export type StorageUploadResult = {
@@ -267,6 +274,46 @@ export async function uploadFilesToStorage(
     });
   }
 
+  const stamp = formatOutputStamp(now);
+
+  let htmlExtras: Partial<JobMetadata>;
+
+  const htmlResult = runDitaOtHtml5(files, assets);
+
+  if (htmlResult.status === "ok") {
+    for (const [rel, body] of htmlResult.files.entries()) {
+      zip.file(`html/${rel}`, body);
+    }
+    const previewPrefix = `${jobId}/${stamp}-html-preview`;
+    await uploadHtmlPreviewArtifacts(supabase, previewPrefix, htmlResult.files);
+
+    const entryKey = `${previewPrefix}/${htmlResult.entryRelativePath}`;
+    const previewUrl = supabase.storage.from("outputs").getPublicUrl(entryKey).data.publicUrl;
+
+    htmlExtras = {
+      htmlGenerationStatus: "ok",
+      htmlFileCount: htmlResult.files.size,
+      htmlEntryRelativePath: htmlResult.entryRelativePath,
+      htmlPreviewUrl: previewUrl,
+    };
+  } else if (htmlResult.status === "failed") {
+    if (ditaOtStrict()) {
+      throw new Error(
+        `[DITA_OT_STRICT] DITA Open Toolkit HTML5 failed: ${htmlResult.message}` +
+          (htmlResult.logSnippet ? `\n${htmlResult.logSnippet}` : ""),
+      );
+    }
+    htmlExtras = {
+      htmlGenerationStatus: "failed",
+      htmlGenerationMessage: htmlResult.message,
+    };
+  } else {
+    htmlExtras = {
+      htmlGenerationStatus: "skipped",
+      htmlGenerationMessage: htmlResult.message,
+    };
+  }
+
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
   const path = buildOutputPath(jobId, now);
   const { error } = await supabase.storage.from("outputs").upload(path, buffer, {
@@ -288,6 +335,7 @@ export async function uploadFilesToStorage(
     validationPassed: validation.passed,
     validationIssueCount: validation.issueCount,
     ...(validation.agent2Skipped ? { agent2ValidationSkipped: true } : {}),
+    ...htmlExtras,
   };
 
   return {
@@ -299,8 +347,75 @@ export async function uploadFilesToStorage(
 }
 
 export function buildOutputPath(jobId: string, now = new Date()): string {
-  const timestamp = now.toISOString().replace(/[-:]/g, "").replace(".", "");
-  return `${jobId}/${timestamp}-dita_output.zip`;
+  return `${jobId}/${formatOutputStamp(now)}-dita_output.zip`;
+}
+
+function formatOutputStamp(now: Date): string {
+  return now.toISOString().replace(/[-:]/g, "").replace(".", "");
+}
+
+async function uploadHtmlPreviewArtifacts(
+  supabase: StorageLike,
+  previewPrefix: string,
+  files: Map<string, Buffer>,
+): Promise<void> {
+  const entries = [...files.entries()];
+  const limit = 6;
+
+  for (let i = 0; i < entries.length; i += limit) {
+    const batch = entries.slice(i, i + limit);
+    await Promise.all(
+      batch.map(async ([relativePath, body]) => {
+        const objectPath = `${previewPrefix}/${relativePath}`;
+        const { error } = await supabase.storage.from("outputs").upload(objectPath, body, {
+          cacheControl: "3600",
+          contentType: mimeTypeForPreviewPath(relativePath),
+          upsert: true,
+        });
+        if (error) {
+          throw new Error(getErrorMessage(error));
+        }
+      }),
+    );
+  }
+}
+
+function mimeTypeForPreviewPath(relativePath: string): string {
+  const lower = relativePath.toLowerCase();
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+    return "text/html";
+  }
+  if (lower.endsWith(".css")) {
+    return "text/css";
+  }
+  if (lower.endsWith(".js")) {
+    return "application/javascript";
+  }
+  if (lower.endsWith(".svg")) {
+    return "image/svg+xml";
+  }
+  if (lower.endsWith(".png")) {
+    return "image/png";
+  }
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (lower.endsWith(".gif")) {
+    return "image/gif";
+  }
+  if (lower.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (lower.endsWith(".json")) {
+    return "application/json";
+  }
+  if (lower.endsWith(".woff")) {
+    return "font/woff";
+  }
+  if (lower.endsWith(".woff2")) {
+    return "font/woff2";
+  }
+  return "application/octet-stream";
 }
 
 function ensureDitaExtension(filename: string): string {

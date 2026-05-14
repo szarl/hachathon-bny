@@ -161,18 +161,22 @@ export function ProgressIndicator({ state }: ProgressIndicatorProps) {
                 </span>
               </button>
               {issuesExpanded ? (
-                <div className="rounded-lg border border-black/15 bg-black/[0.03]">
+                <div className="min-w-0 overflow-x-auto rounded-lg border border-black/15 bg-black/[0.03]">
                   <div className="divide-y divide-black/10">
                     {state.validationIssues.map((issue, idx) => (
                       <div
                         key={`${issue.file ?? ""}-${issue.rule}-${idx}`}
-                        className="grid gap-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.4fr)] sm:gap-3"
+                        className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-1 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,26%)_minmax(0,22%)_minmax(0,1fr)] sm:items-start sm:gap-y-2"
                       >
-                        <code className="break-all text-xs text-black">
+                        <code className="max-w-full min-w-0 break-all text-xs text-black">
                           {issue.file ?? "—"}
                         </code>
-                        <span className="text-black/80">{issue.rule}</span>
-                        <span className="text-black/70">{issue.message}</span>
+                        <span className="max-w-full min-w-0 break-words font-medium text-black/80">
+                          {issue.rule}
+                        </span>
+                        <span className="max-w-full min-w-0 break-words [overflow-wrap:anywhere] text-black/70">
+                          {issue.message}
+                        </span>
                       </div>
                     ))}
                   </div>

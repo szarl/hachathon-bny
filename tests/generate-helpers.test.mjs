@@ -21,10 +21,12 @@ async function loadGenerateHelpers() {
   const parseDelimitedPath = fileURLToPath(new URL("../src/lib/parse-delimited-dita-output.ts", import.meta.url));
   const errorMessagePath = fileURLToPath(new URL("../src/lib/error-message.ts", import.meta.url));
   const generatePath = fileURLToPath(new URL("../src/lib/generate.ts", import.meta.url));
+  const ditaHtml5Path = fileURLToPath(new URL("../src/lib/dita-html5.ts", import.meta.url));
 
-  const [parseDelimitedSrc, errorMessageSrc, generateSrc] = await Promise.all([
+  const [parseDelimitedSrc, errorMessageSrc, ditaHtml5Src, generateSrc] = await Promise.all([
     readFile(parseDelimitedPath, "utf8"),
     readFile(errorMessagePath, "utf8"),
+    readFile(ditaHtml5Path, "utf8"),
     readFile(generatePath, "utf8"),
   ]);
 
@@ -36,9 +38,16 @@ async function loadGenerateHelpers() {
     .transpileModule(errorMessageSrc, TS_OPTS)
     .outputText.replace(/^export function getErrorMessage/m, "function getErrorMessage");
 
+  let ditaHtml5Js = ts.transpileModule(ditaHtml5Src, TS_OPTS).outputText;
+  ditaHtml5Js = ditaHtml5Js.replace(/\nexport \{ ditaOtStrict \};\s*$/m, "");
+  ditaHtml5Js = ditaHtml5Js.replace(/^export async function /gm, "async function ");
+  ditaHtml5Js = ditaHtml5Js.replace(/^export function /gm, "function ");
+
   const generateJs = ts
     .transpileModule(generateSrc, TS_OPTS)
     .outputText
+    .replace('import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";\r\n', "")
+    .replace('import { ditaOtStrict, runDitaOtHtml5 } from "@/lib/dita-html5";\n', "")
     .replace('import { getErrorMessage } from "@/lib/error-message";\r\n', "")
     .replace('import { getErrorMessage } from "@/lib/error-message";\n', "")
     .replace('import { parseDelimitedDitaOutput } from "./parse-delimited-dita-output";\r\n', "")
@@ -46,7 +55,7 @@ async function loadGenerateHelpers() {
     .replace('import("fast-xml-parser")', `import("${fastXmlParserUrl}")`)
     .replace('import("jszip")', `import("${jszipUrl}")`);
 
-  const combined = `${parseDelimitedJs}\n${errorMessageJs}\n${generateJs}`;
+  const combined = `${ditaHtml5Js}\n${parseDelimitedJs}\n${errorMessageJs}\n${generateJs}`;
 
   const encoded = Buffer.from(combined, "utf8").toString("base64");
   return import(`data:text/javascript;base64,${encoded}`);
@@ -301,6 +310,8 @@ test("uploadFilesToStorage zips XML and only referenced image assets, then retur
     skippedAssetCount: 1,
     validationPassed: true,
     validationIssueCount: 0,
+    htmlGenerationStatus: "skipped",
+    htmlGenerationMessage: "DITA_OT_ENABLED is not set.",
   });
 
   const zip = await JSZip.loadAsync(uploads[0].body);

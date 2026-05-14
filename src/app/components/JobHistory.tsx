@@ -16,6 +16,9 @@ export type JobHistoryRow = {
   filename: string;
   status: string;
   output_url: string | null;
+  metadata: {
+    htmlPreviewUrl?: string;
+  } | null;
 };
 
 const DATE_FMT = new Intl.DateTimeFormat(undefined, {
@@ -58,13 +61,12 @@ export function JobHistory() {
 
   const fetchJobs = useCallback(async () => {
     if (!supabase) {
-      setLoadError("Supabase is not configured.");
       return;
     }
 
     const { data, error } = await supabase
       .from("jobs")
-      .select("id,created_at,filename,status,output_url")
+      .select("id,created_at,filename,status,output_url,metadata")
       .order("created_at", { ascending: false })
       .limit(JOB_HISTORY_LIMIT);
 
@@ -79,11 +81,12 @@ export function JobHistory() {
 
   useEffect(() => {
     if (!supabase) {
-      setLoadError("Supabase is not configured.");
       return;
     }
 
-    void fetchJobs();
+    queueMicrotask(() => {
+      void fetchJobs();
+    });
 
     const channel = supabase
       .channel("job-history")
@@ -185,13 +188,25 @@ export function JobHistory() {
                   </td>
                   <td className="py-2.5">
                     {job.status === "done" && job.output_url ? (
-                      <button
-                        type="button"
-                        onClick={() => openDownload(job.output_url!)}
-                        className="text-sm font-semibold text-bny-teal underline-offset-2 hover:underline"
-                      >
-                        Download
-                      </button>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <button
+                          type="button"
+                          onClick={() => openDownload(job.output_url!)}
+                          className="text-sm font-semibold text-bny-teal underline-offset-2 hover:underline"
+                        >
+                          Download
+                        </button>
+                        {job.metadata?.htmlPreviewUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => openDownload(job.metadata!.htmlPreviewUrl!)}
+                            className="text-sm font-semibold text-bny-teal underline-offset-2 hover:underline"
+                            aria-label="Preview HTML output in a new tab"
+                          >
+                            Preview HTML
+                          </button>
+                        ) : null}
+                      </div>
                     ) : (
                       <span className="text-black/40">—</span>
                     )}
