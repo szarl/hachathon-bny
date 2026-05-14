@@ -28,6 +28,7 @@ Work through the PRDs in order. `PRD-01` and `PRD-02` can run in parallel; backe
 
 Current project state:
 
+- npm is package manager
 - Next.js app is already scaffolded in the repo root with TypeScript, App Router, Tailwind, and ESLint.
 - Package name is `hachathon-bny`.
 - Installed AI SDK is `@google/genai`, not the older `@google/generative-ai` package mentioned in parts of the PRD pack.
