@@ -106,7 +106,7 @@ export default function AuditLogsPage() {
             Audit Logs
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-black/70">
-            Mock compliance trail for uploads, conversions, validation runs,
+            Cmpliance trail for uploads, conversions, validation runs,
             exports, and team access changes.
           </p>
         </div>
@@ -249,7 +249,7 @@ export default function AuditLogsPage() {
               Retention policy
             </h2>
             <p className="mt-2 text-sm leading-6 text-black/65">
-              Mock logs are presented as immutable events with a finance-grade
+              Logs are presented as immutable events with a finance-grade
               retention window and CSV export affordance.
             </p>
           </div>

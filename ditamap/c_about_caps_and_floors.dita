@@ -1,22 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-<concept id="concept-1234" class="- topic/topic concept/concept ">
-    <title class="- topic/title ">About Caps and Floors</title>
-    <shortdesc class="- topic/shortdesc ">Provides an overview of interest rate caps and floors, explaining their function as protected interest rate contracts and how they accrue based on strike rates.</shortdesc>
-    <conbody class="- topic/body  concept/conbody ">
-        <p class="- topic/p ">Caps and floors are protected interest rate contracts that grant the right to benefit from a rate move in one direction while limiting risk if the rate moves in the opposite direction.</p>
-        <section class="- topic/section ">
-            <title class="- topic/title ">Contract Types</title>
-            <p class="- topic/p ">The asymmetric nature of these contracts results in two types:</p>
-            <ul class="- topic/ul ">
-                <li class="- topic/li "><p class="- topic/p "><b class="- topic/ph ">Cap:</b> Sets a maximum level on a short-term rate index. The purchaser is compensated if the index exceeds the strike level.</p></li>
-                <li class="- topic/li "><p class="- topic/p "><b class="- topic/ph ">Floor:</b> Sets a minimum rate on an index. The guarantor pays the purchaser whenever the index falls below the strike level on specified dates.</p></li>
-            </ul>
-        </section>
-        <section class="- topic/section ">
-            <title class="- topic/title ">Accrual Logic</title>
-            <p class="- topic/p ">For a Floor contract with a 5% strike, if the underlying coupon is 4.5%, the contract accrues at 0.5%. If the coupon is 5.5%, it accrues at 0%.</p>
-            <p class="- topic/p ">For a Cap contract with a 5% strike, if the underlying coupon is 4.5%, the contract accrues at 0%. If the coupon is 5.5%, it accrues at 0.5%.</p>
-        </section>
-    </conbody>
+<concept id="c_about_caps_and_floors" class="- topic/topic concept/concept ">
+  <title class="- topic/title ">About Caps and Floors</title>
+  <shortdesc class="- topic/shortdesc ">Caps and floors are interest rate derivatives used to manage exposure to floating rate fluctuations. This topic provides an overview of their function within the <ph keyref="product-name"/>.</shortdesc>
+  <conbody class="- topic/body concept/conbody ">
+    <p class="- topic/p ">A cap provides a ceiling on interest rates, while a floor provides a minimum interest rate level. The <ph keyref="product-name"/> supports the full lifecycle of these instruments, from setup to transaction processing.</p>
+  </conbody>
 </concept>

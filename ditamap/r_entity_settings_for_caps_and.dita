@@ -1,34 +1,3 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE reference PUBLIC "-//OASIS//DTD DITA Reference//EN" "reference.dtd">
-<reference id="reference-9012" class="- topic/topic       reference/reference ">
-    <title class="- topic/title ">Entity Settings for Caps and Floors</title>
-    <shortdesc class="- topic/shortdesc ">Provides a reference table for entity-level fields used in cap and floor processing.</shortdesc>
-    <refbody class="- topic/body        reference/refbody ">
-        <table class="- topic/table ">
-            <tgroup cols="3" class="- topic/tgroup ">
-                <colspec colname="c1" colnum="1" class="- topic/colspec "/>
-                <colspec colname="c2" colnum="2" class="- topic/colspec "/>
-                <colspec colname="c3" colnum="3" class="- topic/colspec "/>
-                <thead class="- topic/thead ">
-                    <row class="- topic/row ">
-                        <entry class="- topic/entry ">Field Name</entry>
-                        <entry class="- topic/entry ">Tag</entry>
-                        <entry class="- topic/entry ">Description</entry>
-                    </row>
-                </thead>
-                <tbody class="- topic/tbody ">
-                    <row class="- topic/row ">
-                        <entry class="- topic/entry ">Net Cap Floor</entry>
-                        <entry class="- topic/entry ">5830</entry>
-                        <entry class="- topic/entry ">Determines if the system nets buys and sells into a single position (Yes) or treats them as separate positions (No).</entry>
-                    </row>
-                    <row class="- topic/row ">
-                        <entry class="- topic/entry ">Tech Short Eligible Indicator</entry>
-                        <entry class="- topic/entry ">57</entry>
-                        <entry class="- topic/entry ">Indicates if the entity can go technically short. Options: Yes (allows oversell) or No (recommended; does not allow oversell).</entry>
-                    </row>
-                </tbody>
-            </tgroup>
-        </table>
-    </refbody>
-</reference>
+<reference id="reference-2345" class="- topic/topic reference/reference "><title class="- topic/title ">Entity Settings for Caps and Floors</title><shortdesc class="- topic/shortdesc ">This reference lists the entity-level fields and tags required for processing cap and floor contracts in <ph keyref="product-name"/>.</shortdesc><refbody class="- topic/body reference/refbody "><section class="- topic/section "><table class="- topic/table "><tgroup cols="3" class="- topic/tgroup "><colspec colname="c1" colnum="1" class="- topic/colspec "/><colspec colname="c2" colnum="2" class="- topic/colspec "/><colspec colname="c3" colnum="3" class="- topic/colspec "/><thead class="- topic/thead "><row class="- topic/row "><entry class="- topic/entry ">Field Name</entry><entry class="- topic/entry ">Tag</entry><entry class="- topic/entry ">Description</entry></row></thead><tbody class="- topic/tbody "><row class="- topic/row "><entry class="- topic/entry ">Net Cap Floor</entry><entry class="- topic/entry ">5830</entry><entry class="- topic/entry ">Determines how the system processes caps and floors. Options include: Yes (nets buy and sell into a single position) or No (treats buy and sell as separate positions).</entry></row><row class="- topic/row "><entry class="- topic/entry ">Tech Short Eligible Indicator</entry><entry class="- topic/entry ">57</entry><entry class="- topic/entry ">Indicates whether the entity can go technically short. Options include: Yes (allows overselling) or No (rejects trades that result in a short position).</entry></row></tbody></tgroup></table></section></refbody></reference>

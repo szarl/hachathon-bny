@@ -1,17 +1,3 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-<concept id="concept-3456" class="- topic/topic concept/concept ">
-    <title class="- topic/title ">Set Up Securities for Caps and Floors</title>
-    <shortdesc class="- topic/shortdesc ">Explains how to establish cap/floor security master records and configure coupon types for accurate accrual calculations.</shortdesc>
-    <conbody class="- topic/body  concept/conbody ">
-        <p class="- topic/p ">Use Reference Data Center or the Accounting Center Issue Viewer to create a cap/floor Security Master File (SMF) record. Ensure that First Coupon Date, Last Coupon Date, and Maturity Date values do not include Delay Days.</p>
-        <section class="- topic/section ">
-            <title class="- topic/title ">Coupon Setup</title>
-            <p class="- topic/p "><ph keyref="product-name" class="- topic/ph "/> supports Variable Rate, Unscheduled Variable Rate, Floating Rate, and Inverse Floating Rate coupon types. For Floating Rate types, the system adds the Index Offset (tag 215) to the underlying security coupon rate and compares the sum against the Strike Rate.</p>
-        </section>
-        <section class="- topic/section ">
-            <title class="- topic/title ">Cap Coupon Rate Example</title>
-            <p class="- topic/p ">For a Cap with an 8% strike and 250 bps offset, if the total rate is 8.5%, the system accrues the 0.5% difference. If subsequent rates are below 8%, the accrual is 0.00%.</p>
-        </section>
-    </conbody>
-</concept>
+<concept id="concept-5678" class="- topic/topic concept/concept "><title class="- topic/title ">Set Up Securities for Caps and Floors</title><shortdesc class="- topic/shortdesc ">This topic explains how to establish cap and floor security records and configure coupon settings.</shortdesc><conbody class="- topic/body concept/conbody "><p class="- topic/p ">You can use the Reference Data Center to establish a cap or floor Security Master File (SMF) record with the Cap - Floor data strategy. Alternatively, you can use the Accounting Center's Issue Viewer. Use the Caps &amp; Floors panel to set up a cap or floor security.</p><section class="- topic/section "><title class="- topic/title ">Caps and Floors Key Options</title><p class="- topic/p ">A cap or floor must adhere to the same requirements as all fixed income securities. The First Coupon Date, Last Coupon Date, and Maturity Date values must not include Delay Days.</p></section><section class="- topic/section "><title class="- topic/title ">Coupon Setup for Caps and Floors</title><p class="- topic/p ">When you use the Caps &amp; Floors panel, you must specify a Coupon Type (tag 97). <ph keyref="product-name"/> supports Variable Rate, Unscheduled Variable Rate, Floating Rate, and Inverse Floating Rate. For Floating and Inverse Floating rates, the system requires specific underlying security fields.</p></section><section class="- topic/section "><title class="- topic/title ">Cap Coupon Rate Example</title><p class="- topic/p ">In this example, a Cap Security has a Strike Rate of 8%, LIBOR as the underlying index, and an Index Offset of 250 basis points. On January 1, <ph keyref="product-name"/> compares the All in Rate (8.5%) against the Strike Price (8%). Because the All in Rate exceeds the Strike Price, <ph keyref="product-name"/> accrues the difference (0.5%). In subsequent quarters, if rates do not exceed the Strike Rate, <ph keyref="product-name"/> accrues at a Coupon Rate of 0.00%.</p></section></conbody></concept>

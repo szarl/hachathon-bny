@@ -163,7 +163,7 @@ export function TeamManagementClient() {
             Team Management
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-black/70">
-            Mock access workspace for hackathon reviewers, conversion operators,
+            Access workspace for reviewers, conversion operators,
             and compliance approvers.
           </p>
         </div>
@@ -328,7 +328,7 @@ export function TeamManagementClient() {
                   Access model
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-black/65">
-                  Mock roles mirror the conversion workflow: platform setup,
+                  Roles mirror the conversion workflow: platform setup,
                   compliance review, conversion operations, and read-only audit.
                 </p>
               </div>
@@ -368,7 +368,7 @@ export function TeamManagementClient() {
                   Review ready
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-emerald-950/75">
-                  All mock active members have MFA coverage and a named role for
+                  All active members have MFA coverage and a named role for
                   the demo environment.
                 </p>
               </div>

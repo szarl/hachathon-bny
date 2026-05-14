@@ -45,6 +45,7 @@ supabase/.branches/
 /.next/
 /out/
 
+ditamap
 ditamap/*
 
 # production

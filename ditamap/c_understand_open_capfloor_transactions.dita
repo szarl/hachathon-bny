@@ -1,17 +1,3 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-<concept id="concept-2468" class="- topic/topic concept/concept ">
-    <title class="- topic/title ">Understand Open Cap/Floor Transactions</title>
-    <shortdesc class="- topic/shortdesc ">Explains the system processes triggered when opening a cap/floor contract, including premium calculations and ledger updates.</shortdesc>
-    <conbody class="- topic/body  concept/conbody ">
-        <p class="- topic/p ">Opening a cap/floor contract triggers premium calculations, inventory position creation, and general ledger updates. Premiums are paid upfront and amortized over the contract life.</p>
-        <section class="- topic/section ">
-            <title class="- topic/title ">Calculation for Open Cap/Floor Transaction</title>
-            <p class="- topic/p ">The system uses the following formulas:</p>
-            <ul class="- topic/ul ">
-                <li class="- topic/li ">Local Premium Value = (Quantity * Quantity Scale) * (Price per Contract * Price Multiplier)</li>
-                <li class="- topic/li ">Base Premium Value = Local Premium Value / Spot Exchange Rate to Base</li>
-            </ul>
-        </section>
-    </conbody>
-</concept>
+<concept id="concept-6789" class="- topic/topic concept/concept "><title class="- topic/title ">Understand Open Cap or Floor Transactions</title><shortdesc class="- topic/shortdesc ">This topic describes the calculation and general ledger posting process for opening cap and floor transactions.</shortdesc><conbody class="- topic/body concept/conbody "><p class="- topic/p ">When you open a cap or floor contract, the system calculates and stores the Local and Base Premium, calculates traded interest, creates an inventory position, uses the quantity as the first period's notional amount, and updates the general ledger.</p><section class="- topic/section "><title class="- topic/title ">Calculation for Open Cap or Floor Transaction</title><p class="- topic/p ">The system calculates the Local Premium Value (the Cost or Proceeds) to Open as follows: (Quantity * Quantity Scale) * (Price per Contract * Price Multiplier).</p><p class="- topic/p ">The system calculates the Base Premium Value as: Local Premium Value / Spot Exchange Rate to Base.</p></section><section class="- topic/section "><title class="- topic/title ">General Ledger Postings for Open Cap or Floor Transactions</title><p class="- topic/p ">When a contract opens, the system requires general ledger postings based on whether the Local Currency equals the Settle Currency and the Base Currency. The system handles Buy to Open and Sell to Open (Write) events differently based on these currency settings.</p></section></conbody></concept>
