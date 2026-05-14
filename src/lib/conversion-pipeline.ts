@@ -40,6 +40,7 @@ import {
   maxAgent2OutputTokens,
 } from "@/lib/gemini";
 import { getErrorMessage, setJobStatus as updateJobStatus } from "@/lib/jobs";
+import { readJsonResponse } from "@/lib/http-json";
 import { AGENT_1_SYSTEM_PROMPT, AGENT_2_SYSTEM_PROMPT, CLASSIFY_SYSTEM_PROMPT } from "@/lib/prompts";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import {
@@ -562,15 +563,19 @@ async function extractPdf(pdfUrl: string): Promise<ExtractedPage[]> {
   const formData = new FormData();
   formData.append("file", await pdfResponse.blob(), "source.pdf");
 
-  const extractResponse = await fetch(getExtractApiUrl(), {
+  const extractApiUrl = getExtractApiUrl();
+  const extractResponse = await fetch(extractApiUrl, {
     method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
     body: formData,
   });
 
-  const payload = (await extractResponse.json()) as {
+  const payload = await readJsonResponse<{
     extractedPages?: ExtractedPage[];
     error?: string;
-  };
+  }>(extractResponse, { label: "PDF extraction API", url: extractApiUrl });
 
   if (!extractResponse.ok) {
     throw new Error(payload.error ?? `PDF extraction failed: ${extractResponse.status}`);
@@ -586,13 +591,19 @@ async function extractPdf(pdfUrl: string): Promise<ExtractedPage[]> {
 export function getExtractApiUrl(): string {
   const explicit = process.env.EXTRACT_API_URL?.trim();
   if (explicit) {
-    return explicit;
+    return ensureAbsoluteHttpsUrl(explicit);
   }
-  const vercelUrl = process.env.VERCEL_URL?.trim();
+  const vercelUrl =
+    process.env.VERCEL_URL?.trim() ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
   if (vercelUrl) {
-    return `https://${vercelUrl}/api/extract`;
+    return `${ensureAbsoluteHttpsUrl(vercelUrl).replace(/\/$/, "")}/api/extract`;
   }
   return "http://127.0.0.1:8001/api/extract";
+}
+
+function ensureAbsoluteHttpsUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
 async function setJobStatus(
